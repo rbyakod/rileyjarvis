@@ -20,6 +20,17 @@ export function RickyFace({ mood, mouthShape }: RickyFaceProps) {
       }
       aria-label={`Ricky mood: ${mood}`}
     >
+      <div className="face-void" aria-hidden="true" />
+      <div className="shoulders" aria-hidden="true">
+        <span className="shoulder shoulder-left" />
+        <span className="shoulder shoulder-right" />
+        <span className="shoulder-seam" />
+      </div>
+      <div className="head" aria-hidden="true">
+        <span className="head-rim" />
+        <span className="head-gloss" />
+        <span className="head-shade" />
+      </div>
       <div className="face-glow" aria-hidden="true" />
       <div className="brow-row" aria-hidden="true">
         <span className="brow brow-left" />
@@ -27,10 +38,12 @@ export function RickyFace({ mood, mouthShape }: RickyFaceProps) {
       </div>
       <div className="eye-row">
         <div className="eye">
-          <span />
+          <span className="eye-led" />
+          <span className="eye-pupil" />
         </div>
         <div className="eye">
-          <span />
+          <span className="eye-led" />
+          <span className="eye-pupil" />
         </div>
       </div>
       <div className="mouth-wrap">
