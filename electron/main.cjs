@@ -530,6 +530,18 @@ async function createWindow() {
   } else {
     await win.loadFile(path.join(process.cwd(), "dist", "index.html"));
   }
+
+  startCursorBroadcast();
+}
+
+let cursorInterval = null;
+function startCursorBroadcast() {
+  if (cursorInterval) clearInterval(cursorInterval);
+  cursorInterval = setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
+    const p = screen.getCursorScreenPoint();
+    mainWindow.webContents.send("cursor:pos", { x: p.x, y: p.y });
+  }, 33);
 }
 
 function setWindowMode(mode) {
