@@ -309,28 +309,77 @@ function renderMarkdown(content: string) {
     if (!line.trim()) {
       return <div className="markdown-gap" key={index} />;
     }
+    const standalone = matchStandaloneLink(line);
+    if (standalone) {
+      return (
+        <a className="markdown-link-card" href={standalone.url} key={index} target="_blank" rel="noreferrer">
+          <span className="markdown-link-host">{standalone.host}</span>
+          <span className="markdown-link-title">{standalone.label}</span>
+          <span className="markdown-link-url">{standalone.url}</span>
+        </a>
+      );
+    }
     return <p key={index}>{renderInline(line)}</p>;
   });
 }
 
+type StandaloneLink = { url: string; host: string; label: string };
+
+function matchStandaloneLink(line: string): StandaloneLink | null {
+  const trimmed = line.trim();
+  const mdLink = /^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/.exec(trimmed);
+  if (mdLink) {
+    return { label: mdLink[1], url: mdLink[2], host: hostnameLabel(mdLink[2]) };
+  }
+  const bareLink = /^(https?:\/\/[^\s]+)$/.exec(trimmed);
+  if (bareLink) {
+    return { label: bareLink[1], url: bareLink[1], host: hostnameLabel(bareLink[1]) };
+  }
+  return null;
+}
+
+function hostnameLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "source";
+  }
+}
+
 function renderInline(text: string) {
   const parts: ReactNode[] = [];
-  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+  const tokenRegex = /(\[[^\]]+\]\((?:https?:\/\/[^)]+)\))|(\[(\d{1,3})\])/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
+  let keyIndex = 0;
 
-  while ((match = linkRegex.exec(text)) !== null) {
+  while ((match = tokenRegex.exec(text)) !== null) {
     if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    parts.push(
-      <a href={match[2]} key={`${match[2]}-${match.index}`} target="_blank" rel="noreferrer">
-        {match[1]}
-      </a>,
-    );
+    if (match[1]) {
+      const linkMatch = /^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/.exec(match[1]);
+      if (linkMatch) {
+        parts.push(
+          <a href={linkMatch[2]} key={`link-${keyIdx(keyIndex++)}`} target="_blank" rel="noreferrer">
+            {linkMatch[1]}
+          </a>,
+        );
+      }
+    } else if (match[2] && match[3]) {
+      parts.push(
+        <sup className="citation-chip" key={`cite-${keyIdx(keyIndex++)}`}>
+          {match[3]}
+        </sup>,
+      );
+    }
     lastIndex = match.index + match[0].length;
   }
 
   if (lastIndex < text.length) parts.push(text.slice(lastIndex));
   return parts.length > 0 ? parts : text;
+}
+
+function keyIdx(n: number): string {
+  return n.toString(36);
 }
 
 function NotesGrid({ content }: { content: string }) {

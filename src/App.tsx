@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BrainCircuit, Expand, History, Keyboard, Mic, MicOff, MonitorCog, PanelRight, Send } from "lucide-react";
+import { BrainCircuit, Expand, Keyboard, Mic, MicOff, MonitorCog, PanelRight, ScrollText, Send } from "lucide-react";
 import { ArtifactPanel } from "./components/ArtifactPanel";
 import { RickyFace } from "./components/RickyFace";
 import { newEntry, RickyRealtimeClient, type MouthShape, type RickyConnectionState, type RickyMood, type TranscriptEntry } from "./lib/realtime";
@@ -110,6 +110,14 @@ export default function App() {
       <div className="window-drag-strip" aria-hidden="true" />
       <div className="window-drag-left-zone" aria-hidden="true" />
       <section className="companion-window">
+        <button
+          className={showLog ? "log-toggle active" : "log-toggle"}
+          onClick={() => setShowLog((value) => !value)}
+          aria-label="Toggle live log"
+          title="Toggle live log"
+        >
+          <ScrollText size={14} />
+        </button>
         <section className="face-stage">
           <RickyFace mood={mood} mouthShape={mouthShape} />
         </section>
@@ -173,14 +181,6 @@ export default function App() {
               title="Toggle artifacts"
             >
               <BrainCircuit size={16} />
-            </button>
-            <button
-              className={showLog ? "simple-button active" : "simple-button"}
-              onClick={() => setShowLog((value) => !value)}
-              aria-label="Toggle live log"
-              title="Toggle live log"
-            >
-              <History size={16} />
             </button>
           </section>
         </footer>

@@ -1,7 +1,17 @@
 import type { RickyArtifact, RickyToolCall, RickyToolResult, RickyToolSpec } from "../vite-env";
 
 export type RickyConnectionState = "idle" | "connecting" | "connected" | "error";
-export type RickyMood = "idle" | "listening" | "thinking" | "speaking" | "working" | "error";
+export type RickyMood =
+  | "idle"
+  | "listening"
+  | "thinking"
+  | "speaking"
+  | "working"
+  | "error"
+  | "happy"
+  | "curious"
+  | "confused"
+  | "celebrating";
 
 export type MouthShape = {
   open: number;
@@ -275,6 +285,9 @@ export class RickyRealtimeClient {
       const result = await window.ricky.executeTool({ name, arguments: parsedArgs } satisfies RickyToolCall);
       if (result.mode === "display" || result.mode === "computer") {
         this.callbacks.onMode(result.mode);
+      }
+      if (typeof result.mood === "string") {
+        this.callbacks.onMood(result.mood as RickyMood);
       }
       if (result.artifact) this.callbacks.onArtifact(result.artifact);
       if (result.thumbnailReady === true) this.callbacks.onThumbnailReady();

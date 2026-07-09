@@ -20,6 +20,11 @@ export function RickyFace({ mood, mouthShape }: RickyFaceProps) {
       }
       aria-label={`Ricky mood: ${mood}`}
     >
+      <div className="face-glow" aria-hidden="true" />
+      <div className="brow-row" aria-hidden="true">
+        <span className="brow brow-left" />
+        <span className="brow brow-right" />
+      </div>
       <div className="eye-row">
         <div className="eye">
           <span />

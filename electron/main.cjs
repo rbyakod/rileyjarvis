@@ -30,6 +30,7 @@ Concise, calm, useful. Use a confident man's voice. Talk like a smart operator, 
 - Use read-only tools when the user's intent is clear.
 - When Riley says "show me the menu", "show me what I can do", or asks what Ricky can do, call show_menu immediately.
 - For web search, notes, charts, records, image generation, and artifact display, act directly when the request is clear.
+- Use set_mood to make your face match the moment. Pick "happy" after good news or success, "celebrating" after a finished task Riley is excited about, "curious" when Riley asks an interesting question, "confused" when a request is unclear, "thinking"/"working" while a tool runs. Do not over-use mood changes; keep them natural.
 - For thumbnail creation/editing, always use the thumbnail board tools, never generic image_generate and never artifact_show with imageLoading. Generate exactly one 16:9 image per request. Never generate multiple unless Riley separately asks again. Every generate/edit request gets a permanent database number that never changes, like #18 then #19 then #20. Do not renumber visible grid positions. Show paginated 3x3 pages of the permanent numbers. Do not show a standalone fullscreen loading animation for thumbnails. Use Riley's wording literally: do not invent elaborate extra concepts, fake text, or extra thumbnail ideas. For edits, use the exact existing numbered/selected image as input and make only the requested change.
 - The thumbnail board persists across sessions. If Riley references thumbnail #N, trust that permanent number and call the matching thumbnail tool. Do not say you cannot see old thumbnails. Use thumbnail_grid to refresh state or change pages if needed.
 - When a thumbnail finishes generating or editing, do not announce it verbally. The UI updates silently.
@@ -40,7 +41,7 @@ Concise, calm, useful. Use a confident man's voice. Talk like a smart operator, 
 
 # Artifacts
 Use artifacts for menus, web results, graphics, notes, database tables, code snippets, and task progress. If the user asks to show, hide, or fullscreen the artifacts panel, call the artifact tool.
-For Mermaid charts, keep syntax simple: start with flowchart TD, avoid markdown fences, avoid parentheses in node labels, and use short alphanumeric node IDs.
+For Mermaid charts, keep syntax simple: start with flowchart TD, avoid markdown fences, avoid parentheses in node labels, and use short alphanumeric node IDs. Every Mermaid node must include a short subtitle that is one short sentence explaining that step, written on a new line under the title using the <br/> tag and an HTML <small> tag. Example: A["Build thumbnail<br/><small>Generate 16:9 image with prompt</small>"] --> B["Approve<br/><small>Riley confirms the result</small>"]. Never put a node title alone without a subtitle.
 
 # Audio
 Let the user interrupt. If audio is unclear, ask one short clarifying question instead of guessing.`;
@@ -56,6 +57,22 @@ const toolSpecs = [
         mode: { type: "string", enum: ["display", "computer"] },
       },
       required: ["mode"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "set_mood",
+    description: "Set Ricky's face mood so his expression matches the moment. Use happy for good news, celebrating for finished wins, curious for interesting questions, confused when a request is unclear, thinking/working while a tool runs. Keep changes natural and rare.",
+    parameters: {
+      type: "object",
+      properties: {
+        mood: {
+          type: "string",
+          enum: ["idle", "listening", "thinking", "speaking", "working", "happy", "curious", "confused", "celebrating", "error"],
+        },
+      },
+      required: ["mood"],
       additionalProperties: false,
     },
   },
@@ -631,6 +648,12 @@ ipcMain.handle("tools:execute", async (_event, toolCall) => {
       };
     }
 
+    const allowedMoods = ["idle", "listening", "thinking", "speaking", "working", "happy", "curious", "confused", "celebrating", "error"];
+    if (name === "set_mood") {
+      const mood = allowedMoods.includes(String(args.mood)) ? String(args.mood) : "idle";
+      return { ok: true, mood, silent: true };
+    }
+
     if (name === "artifact_show") {
       return { ok: true, artifact: args };
     }
@@ -940,6 +963,7 @@ Here is what you can ask me to do.
 - Talk naturally with Ricky in realtime.
 - Interrupt mid-response and ask follow-ups.
 - Ask unrelated questions while tools keep running.
+- Ricky's face reacts: happy for wins, curious for interesting ideas, confused when unclear.
 
 ## Artifacts Panel
 
