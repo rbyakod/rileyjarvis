@@ -376,6 +376,153 @@ button:disabled {
   max-height: none;
 }
 
+.camera-picker {
+  position: absolute;
+  z-index: 11;
+  right: 18px;
+  bottom: 118px;
+  display: flex;
+  width: min(320px, calc(100% - 36px));
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(11, 12, 18, 0.96);
+  border: 1px solid rgba(125, 223, 255, 0.18);
+  border-radius: 12px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.5);
+}
+
+.camera-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  color: #c9ceda;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.camera-close:hover {
+  background: rgba(255, 91, 114, 0.18);
+  border-color: rgba(255, 91, 114, 0.4);
+  color: #fff;
+}
+
+.camera-device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.camera-device {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: 8px;
+  color: #e9ecf8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.camera-device:hover:not(:disabled) {
+  background: rgba(125, 223, 255, 0.1);
+  border-color: rgba(125, 223, 255, 0.32);
+}
+
+.camera-device:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.camera-device-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.camera-device-kind {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #a9afbd;
+}
+
+.camera-device-kind.kind-iphone {
+  background: rgba(74, 222, 128, 0.18);
+  color: #b8f5c8;
+}
+
+.camera-device-kind.kind-macbook {
+  background: rgba(125, 223, 255, 0.18);
+  color: #c9eeff;
+}
+
+.camera-analyze-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #c9ceda;
+  cursor: pointer;
+}
+
+.camera-analyze-toggle input {
+  accent-color: #7ddfff;
+}
+
+.camera-status,
+.camera-error {
+  margin: 0;
+  font-size: 12px;
+  color: #a9afbd;
+}
+
+.camera-error {
+  color: #ff8d9b;
+}
+
+.image-artifact-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.image-analysis-card {
+  padding: 14px 16px;
+  background: rgba(125, 223, 255, 0.05);
+  border: 1px solid rgba(125, 223, 255, 0.18);
+  border-radius: 10px;
+}
+
+.image-analysis-eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: #7ddfff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.image-analysis-card p {
+  margin: 0;
+  color: #d6dce8;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .mood-row span,
 .eyebrow {
   color: #7ddfff;

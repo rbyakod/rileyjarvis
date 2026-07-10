@@ -376,6 +376,62 @@ const toolSpecs = [
       additionalProperties: false,
     },
   },
+  {
+    type: "function",
+    name: "camera_list_devices",
+    description:
+      "List available cameras (MacBook built-in, iPhone Continuity Camera, external webcams). Returns a table artifact of devices. Use before camera_capture when the user references 'the iPhone' or 'MacBook camera'.",
+    parameters: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "camera_show_picker",
+    description:
+      "Open the camera device picker in the Ricky UI so the user can choose between MacBook camera, iPhone Continuity Camera, etc. Use this when the user says 'take a photo' or 'take a snapshot' but has NOT named a specific camera. Also briefly ask the user which camera they'd like (e.g., 'Which camera — MacBook or iPhone?'). After they pick, the picker handles capture automatically.",
+    parameters: {
+      type: "object",
+      properties: {
+        analyze: { type: "boolean", description: "If true, the picker's analyze toggle is preset on. Default false." },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "camera_capture",
+    description:
+      "Capture a still photo from a camera. Defaults to the first non-screen video device (usually the MacBook camera or the iPhone if it's the only one). Pass an explicit device name or index from camera_list_devices to choose. Optionally save to the macOS Photos library and analyze with vision AI. Examples: 'take a photo with my iPhone', 'snap a selfie and tell me what I'm holding'.",
+    parameters: {
+      type: "object",
+      properties: {
+        device: { type: "string", description: "Device label (substring match) or numeric index from camera_list_devices. Omit for default." },
+        saveToPhotos: { type: "boolean", description: "If true (default), import the capture into the macOS Photos library." },
+        analyze: { type: "boolean", description: "If true, run vision analysis after capture and attach a description." },
+        analysisPrompt: { type: "string", description: "Custom question for the vision model. Defaults to 'Describe what's in this photo in 2-3 sentences.'" },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "camera_analyze",
+    description: "Run vision analysis on an existing image file. Use when the user asks 'what's in this picture' for an already-captured or generated image.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute path to the image file." },
+        prompt: { type: "string", description: "Question or instruction for the vision model. Defaults to a general description request." },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 async function ensureData() {
@@ -641,6 +697,184 @@ ipcMain.handle("realtime:create-token", async () => {
   return { value, expiresAt: data.expires_at || data.client_secret?.expires_at || null };
 });
 
+async function resolveCaptureBinary() {
+  for (const candidate of ["ffmpeg", "imagesnap"]) {
+    try {
+      await execFileAsync("which", [candidate]);
+      console.log(`[camera] capture binary resolved: ${candidate}`);
+      return candidate;
+    } catch {
+      // try next
+    }
+  }
+  console.log("[camera] no capture binary found (ffmpeg or imagesnap required)");
+  return null;
+}
+
+async function listCameraDevices() {
+  console.log("[camera] listing devices");
+  const binary = await resolveCaptureBinary();
+  if (!binary) {
+    return {
+      ok: false,
+      error: "No camera capture binary found. Install one with: brew install ffmpeg",
+      devices: [],
+    };
+  }
+
+  let devices = [];
+  if (binary === "ffmpeg") {
+    let stderr = "";
+    try {
+      await execFileAsync("ffmpeg", ["-f", "avfoundation", "-list_devices", "true", "-i", ""]);
+    } catch (err) {
+      stderr = (err.stderr || "").toString();
+    }
+    const lines = stderr.split("\n");
+    let inVideo = false;
+    for (const line of lines) {
+      const videoMatch = /AVFoundation video devices:/.exec(line);
+      const audioMatch = /AVFoundation audio devices:/.exec(line);
+      if (videoMatch) inVideo = true;
+      else if (audioMatch) inVideo = false;
+      else if (inVideo) {
+        const m = /\[(\d+)\]\s+(.+)$/.exec(line);
+        if (m && !/Capture screen/.test(m[2])) {
+          const label = m[2].trim();
+          let kind = "external";
+          if (/iphone/i.test(label)) kind = "iphone";
+          else if (/facetime|FaceTime|built-in|Built-in/i.test(label)) kind = "macbook";
+          devices.push({ index: Number(m[1]), label, kind });
+        }
+      }
+    }
+  } else {
+    try {
+      const { stdout } = await execFileAsync("imagesnap", ["-l"]);
+      for (const line of stdout.split("\n")) {
+        const m = /<AVCaptureDevice: \[(.*?)\]>/.exec(line) || /(\d+):\s+(.+)$/.exec(line);
+        if (m) {
+          const label = (m[1] || m[2]).toString().trim();
+          let kind = "external";
+          if (/iphone/i.test(label)) kind = "iphone";
+          else if (/facetime|built-in/i.test(label)) kind = "macbook";
+          devices.push({ index: devices.length, label, kind });
+        }
+      }
+    } catch (err) {
+      console.log(`[camera] imagesnap list failed: ${err.message}`);
+      return { ok: false, error: String(err.message || err), devices: [] };
+    }
+  }
+
+  console.log(`[camera] found ${devices.length} device(s):`);
+  for (const d of devices) console.log(`[camera]   [${d.index}] ${d.label} (${d.kind})`);
+  return { ok: true, binary, devices };
+}
+
+async function captureStill(deviceIndex, outPath) {
+  const binary = await resolveCaptureBinary();
+  if (!binary) throw new Error("No camera capture binary found. Install ffmpeg: brew install ffmpeg");
+
+  console.log(`[camera] capturing device=${deviceIndex} → ${outPath}`);
+  const start = Date.now();
+
+  if (binary === "ffmpeg") {
+    await execFileAsync("ffmpeg", [
+      "-y",
+      "-f", "avfoundation",
+      "-framerate", "30",
+      "-video_device_index", String(deviceIndex),
+      "-i", "",
+      "-frames:v", "1",
+      "-update", "1",
+      outPath,
+    ]);
+  } else {
+    const args = ["-w", "1.5", outPath];
+    if (deviceIndex !== 0 || true) args.unshift("-d", String(deviceIndex));
+    await execFileAsync("imagesnap", args);
+  }
+
+  let size = 0;
+  try {
+    const stat = await fs.stat(outPath);
+    size = stat.size;
+  } catch {}
+  console.log(`[camera] capture done in ${Date.now() - start}ms, ${size} bytes`);
+  return outPath;
+}
+
+async function saveToPhotos(filePath) {
+  console.log(`[camera] importing to Photos: ${filePath}`);
+  const script = `tell application "Photos" to import POSIX file "${filePath}"`;
+  try {
+    await execFileAsync("osascript", ["-e", script]);
+    console.log("[camera] Photos import OK");
+    return { ok: true };
+  } catch (err) {
+    console.log(`[camera] Photos import failed: ${err.message}`);
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+async function analyzeImage(filePath, prompt) {
+  console.log(`[camera] analyzing ${filePath} (prompt: ${(prompt || "default").slice(0, 60)}…)`);
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.log("[camera] OPENAI_API_KEY missing — analysis skipped");
+    return { ok: false, error: "OPENAI_API_KEY missing" };
+  }
+
+  let base64;
+  try {
+    const buf = await fs.readFile(filePath);
+    base64 = buf.toString("base64");
+    console.log(`[camera] image base64 size: ${(base64.length / 1024).toFixed(1)} KB`);
+  } catch (err) {
+    console.log(`[camera] image read failed: ${err.message}`);
+    return { ok: false, error: `Could not read image: ${err.message}` };
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
+
+  const body = {
+    model: "gpt-4o",
+    max_tokens: 400,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt || "Describe what's in this photo in 2-3 sentences." },
+          { type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } },
+        ],
+      },
+    ],
+  };
+
+  const start = Date.now();
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.log(`[camera] OpenAI error ${response.status}: ${text.slice(0, 200)}`);
+    return { ok: false, error: `OpenAI ${response.status}: ${text.slice(0, 200)}` };
+  }
+
+  const data = await response.json();
+  const text = data?.choices?.[0]?.message?.content || "";
+  console.log(`[camera] analysis done in ${Date.now() - start}ms, ${text.length} chars`);
+  return { ok: true, text };
+}
+
 ipcMain.handle("tools:execute", async (_event, toolCall) => {
   const name = String(toolCall?.name || "");
   const args = asObject(toolCall?.arguments);
@@ -878,6 +1112,170 @@ end tell`;
           title: "UI Inspect",
           kind: "text",
           content: stdout.trim(),
+        },
+      };
+    }
+
+    if (name === "camera_list_devices") {
+      const result = await listCameraDevices();
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: result.error,
+          artifact: {
+            title: "Camera Devices",
+            kind: "text",
+            content: `Could not list cameras: ${result.error}`,
+          },
+        };
+      }
+      const rows = result.devices.map((d) => ({
+        index: d.index,
+        device: d.label,
+        kind: d.kind,
+      }));
+      return {
+        ok: true,
+        binary: result.binary,
+        devices: result.devices,
+        artifact: {
+          title: "Camera Devices",
+          kind: "table",
+          content: JSON.stringify(rows.length ? rows : [{ index: 0, device: "none", kind: "—" }]),
+        },
+      };
+    }
+
+    if (name === "camera_show_picker") {
+      console.log("[camera] AI requested picker");
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("camera:show-picker", { analyze: args.analyze === true });
+      }
+      return {
+        ok: true,
+        artifact: {
+          title: "Camera Picker",
+          kind: "progress",
+          content: "Showing the camera picker — tap a device to capture.",
+        },
+      };
+    }
+
+    if (name === "camera_capture") {
+      const list = await listCameraDevices();
+      if (!list.ok) {
+        return {
+          ok: false,
+          error: list.error,
+          artifact: { title: "Camera Capture", kind: "text", content: list.error },
+        };
+      }
+
+      const wanted = args.device;
+      let chosen = null;
+      if (typeof wanted === "number") {
+        chosen = list.devices.find((d) => d.index === wanted) || null;
+      } else if (typeof wanted === "string" && wanted.trim()) {
+        const needle = wanted.trim().toLowerCase();
+        const numeric = /^\d+$/.test(needle);
+        if (numeric) {
+          const idx = Number(needle);
+          chosen = list.devices.find((d) => d.index === idx) || null;
+        } else {
+          chosen =
+            list.devices.find((d) => d.label.toLowerCase() === needle) ||
+            list.devices.find((d) => d.label.toLowerCase().includes(needle)) ||
+            null;
+        }
+      } else {
+        const wantIphone = /iphone/i.test(String(args.analysisPrompt || "") + String(args.device || ""));
+        if (wantIphone) {
+          chosen = list.devices.find((d) => d.kind === "iphone") || null;
+        }
+        if (!chosen) {
+          chosen =
+            list.devices.find((d) => d.kind === "macbook") ||
+            list.devices[0] ||
+            null;
+        }
+      }
+
+      if (!chosen) {
+        return {
+          ok: false,
+          error: "No camera device available",
+          artifact: { title: "Camera Capture", kind: "text", content: "No camera device available" },
+        };
+      }
+
+      await fs.mkdir(dataDir, { recursive: true });
+      const photoPath = path.join(dataDir, `camera-${Date.now()}.png`);
+      try {
+        await captureStill(chosen.index, photoPath);
+      } catch (err) {
+        return {
+          ok: false,
+          error: String(err.message || err),
+          artifact: {
+            title: "Camera Capture",
+            kind: "text",
+            content: `Capture failed: ${err.message || err}`,
+          },
+        };
+      }
+
+      const shouldSave = args.saveToPhotos !== false;
+      let photosResult = null;
+      if (shouldSave) photosResult = await saveToPhotos(photoPath);
+
+      let analysis = null;
+      const shouldAnalyze = args.analyze === true;
+      if (shouldAnalyze) {
+        const a = await analyzeImage(photoPath, args.analysisPrompt);
+        if (a.ok) analysis = a.text;
+      }
+
+      return {
+        ok: true,
+        device: chosen.label,
+        path: photoPath,
+        savedToPhotos: shouldSave && photosResult?.ok,
+        photosError: photosResult && !photosResult.ok ? photosResult.error : null,
+        analysis,
+        artifact: {
+          title: `Captured via ${chosen.label}`,
+          kind: "image",
+          content: photoPath,
+          analysis: analysis || undefined,
+        },
+      };
+    }
+
+    if (name === "camera_analyze") {
+      const target = String(args.path || "");
+      if (!target) {
+        return { ok: false, error: "path required" };
+      }
+      try {
+        await fs.access(target);
+      } catch {
+        return { ok: false, error: `File not found: ${target}` };
+      }
+      const a = await analyzeImage(target, args.prompt);
+      if (!a.ok) {
+        return {
+          ok: false,
+          error: a.error,
+          artifact: { title: "Image Analysis", kind: "text", content: a.error },
+        };
+      }
+      return {
+        ok: true,
+        text: a.text,
+        artifact: {
+          title: "Image Analysis",
+          kind: "markdown",
+          content: a.text,
         },
       };
     }

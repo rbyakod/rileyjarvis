@@ -9,4 +9,9 @@ contextBridge.exposeInMainWorld("ricky", {
     ipcRenderer.on("cursor:pos", listener);
     return () => ipcRenderer.removeListener("cursor:pos", listener);
   },
+  onShowCameraPicker: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on("camera:show-picker", listener);
+    return () => ipcRenderer.removeListener("camera:show-picker", listener);
+  },
 });

@@ -16,6 +16,7 @@ export type RickyArtifact = {
   content: string;
   language?: string;
   fullscreen?: boolean;
+  analysis?: string;
 };
 
 export type RickyToolSpec = {
@@ -46,6 +47,7 @@ declare global {
       executeTool: (toolCall: RickyToolCall) => Promise<RickyToolResult>;
       getToolSpecs: () => Promise<RickyToolSpec[]>;
       onCursorMove: (cb: (point: { x: number; y: number }) => void) => () => void;
+      onShowCameraPicker: (cb: (payload: { analyze?: boolean }) => void) => () => void;
     };
   }
 }

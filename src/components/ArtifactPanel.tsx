@@ -151,7 +151,17 @@ function renderArtifact(artifact: RickyArtifact, mermaidState: MermaidState) {
       artifact.content.startsWith("http") || artifact.content.startsWith("file://") || artifact.content.startsWith("data:")
         ? artifact.content
         : `file://${artifact.content}`;
-    return <img className="artifact-image" src={src} alt={artifact.title} />;
+    return (
+      <div className="image-artifact-stack">
+        <img className="artifact-image" src={src} alt={artifact.title} />
+        {artifact.analysis ? (
+          <div className="image-analysis-card">
+            <span className="image-analysis-eyebrow">Ricky sees</span>
+            <p>{artifact.analysis}</p>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   if (artifact.kind === "imageLoading") {

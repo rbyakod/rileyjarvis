@@ -1,11 +1,13 @@
-import { useRef, useState } from "react";
-import { BrainCircuit, Expand, Keyboard, Mic, MicOff, MonitorCog, PanelRight, ScrollText, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BrainCircuit, Camera, Expand, Keyboard, Mic, MicOff, MonitorCog, PanelRight, ScrollText, Send } from "lucide-react";
 import { ArtifactPanel } from "./components/ArtifactPanel";
 import { RickyFace } from "./components/RickyFace";
 import { newEntry, RickyRealtimeClient, type MouthShape, type RickyConnectionState, type RickyMood, type TranscriptEntry } from "./lib/realtime";
 import type { RickyArtifact } from "./vite-env";
 
 type RickyMode = "display" | "computer";
+
+type CameraDevice = { index: number; label: string; kind: string };
 
 export default function App() {
   const [connectionState, setConnectionState] = useState<RickyConnectionState>("idle");
@@ -16,6 +18,11 @@ export default function App() {
   const [artifactFullscreen, setArtifactFullscreen] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [showTypeInput, setShowTypeInput] = useState(false);
+  const [showCameraPicker, setShowCameraPicker] = useState(false);
+  const [cameraDevices, setCameraDevices] = useState<CameraDevice[]>([]);
+  const [cameraBusy, setCameraBusy] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraAnalyze, setCameraAnalyze] = useState(true);
   const [mouthShape, setMouthShape] = useState<MouthShape>({ open: 0, width: 0.18, round: 0, teeth: 0 });
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([
     newEntry("system", "Ricky is ready. Connect voice, then talk naturally."),
@@ -25,6 +32,15 @@ export default function App() {
   const clientRef = useRef<RickyRealtimeClient | null>(null);
 
   const isConnected = connectionState === "connected";
+
+  useEffect(() => {
+    if (!window.ricky?.onShowCameraPicker) return;
+    return window.ricky.onShowCameraPicker((payload) => {
+      if (typeof payload?.analyze === "boolean") setCameraAnalyze(payload.analyze);
+      void openCameraPicker();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function connect() {
     const client = new RickyRealtimeClient({
@@ -77,6 +93,44 @@ export default function App() {
       setArtifactVisible(true);
     }
     setTranscript((items) => [newEntry("system", `Mode switched to ${nextMode}.`), ...items].slice(0, 80));
+  }
+
+  async function openCameraPicker() {
+    setShowCameraPicker(true);
+    setCameraError(null);
+    setCameraDevices([]);
+    const result = await window.ricky.executeTool({ name: "camera_list_devices", arguments: {} });
+    if (!result.ok) {
+      setCameraError(result.error || "Could not list cameras");
+      return;
+    }
+    const devices = (result.devices as CameraDevice[]) || [];
+    setCameraDevices(devices);
+    if (devices.length === 0) setCameraError("No cameras found. Plug one in or enable iPhone Continuity Camera.");
+  }
+
+  async function captureFromDevice(device: CameraDevice) {
+    setCameraBusy(true);
+    setCameraError(null);
+    try {
+      const result = await window.ricky.executeTool({
+        name: "camera_capture",
+        arguments: {
+          device: device.label,
+          saveToPhotos: true,
+          analyze: cameraAnalyze,
+          analysisPrompt: "Describe what's in this photo in 2-3 sentences. Be specific and concise.",
+        },
+      });
+      if (result.artifact) {
+        setArtifact(result.artifact);
+        setArtifactVisible(true);
+      }
+      if (!result.ok) setCameraError(result.error || "Capture failed");
+      setShowCameraPicker(false);
+    } finally {
+      setCameraBusy(false);
+    }
   }
 
   function sendTextPrompt() {
@@ -175,6 +229,14 @@ export default function App() {
               <MonitorCog size={16} />
             </button>
             <button
+              className={showCameraPicker ? "simple-button active" : "simple-button"}
+              onClick={() => void openCameraPicker()}
+              aria-label="Take a photo"
+              title="Take a photo"
+            >
+              <Camera size={16} />
+            </button>
+            <button
               className={artifactVisible ? "simple-button active" : "simple-button"}
               onClick={() => setArtifactVisible((value) => !value)}
               aria-label="Toggle artifacts"
@@ -202,6 +264,37 @@ export default function App() {
                 </article>
               ))}
             </div>
+          </section>
+        ) : null}
+
+        {showCameraPicker ? (
+          <section className="camera-picker">
+            <div className="section-title">
+              <span>Camera</span>
+              <button className="camera-close" onClick={() => setShowCameraPicker(false)} aria-label="Close camera picker">
+                ×
+              </button>
+            </div>
+            {cameraError ? <p className="camera-error">{cameraError}</p> : null}
+            {cameraDevices.length === 0 && !cameraError ? <p className="camera-status">Locating cameras…</p> : null}
+            <div className="camera-device-list">
+              {cameraDevices.map((device) => (
+                <button
+                  key={`${device.index}-${device.label}`}
+                  className="camera-device"
+                  disabled={cameraBusy}
+                  onClick={() => void captureFromDevice(device)}
+                >
+                  <span className="camera-device-label">{device.label}</span>
+                  <small className={`camera-device-kind kind-${device.kind}`}>{device.kind}</small>
+                </button>
+              ))}
+            </div>
+            <label className="camera-analyze-toggle">
+              <input type="checkbox" checked={cameraAnalyze} onChange={(e) => setCameraAnalyze(e.target.checked)} />
+              <span>Analyze with vision AI</span>
+            </label>
+            {cameraBusy ? <p className="camera-status">Capturing…</p> : null}
           </section>
         ) : null}
       </section>
