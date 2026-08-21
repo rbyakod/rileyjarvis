@@ -100,7 +100,7 @@ export function RickyFace({ mood, mouthShape }: RickyFaceProps) {
       viewBox="0 0 240 240"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label={`Ricky mood: ${mood}`}
+      aria-label={`Jarvis mood: ${mood}`}
       style={
         {
           "--mouth-alpha": mouthAlpha,

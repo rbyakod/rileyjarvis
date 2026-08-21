@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("ricky", {
   createRealtimeToken: () => ipcRenderer.invoke("realtime:create-token"),
+  llmChat: (payload) => ipcRenderer.invoke("llm:chat", payload),
   executeTool: (toolCall) => ipcRenderer.invoke("tools:execute", toolCall),
   getToolSpecs: () => ipcRenderer.invoke("tools:list"),
   onCursorMove: (cb) => {

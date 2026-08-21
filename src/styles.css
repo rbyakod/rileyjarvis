@@ -155,7 +155,7 @@ button:disabled {
   padding: 18px;
 }
 
-/* ===== Ricky SVG body ===== */
+/* ===== Jarvis SVG body ===== */
 .ricky-svg {
   --led: #f5f7ff;
   --mouth-alpha: 0;
@@ -590,8 +590,76 @@ button:disabled {
 .control-strip {
   display: grid;
   width: max-content;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
+}
+
+/* Status line: always-visible feedback strip above the controls. The dot's
+   color + pulse pace give an at-a-glance clue for what Jarvis is doing. */
+.status-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(560px, 100%);
+  padding: 5px 15px;
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.55);
+  border: 1px solid rgba(148, 190, 160, 0.16);
+}
+
+.status-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5c6a60;
+  transition: background 0.25s ease;
+}
+
+.status-text {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: #aab6ac;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-line[data-mood="listening"] .status-dot {
+  background: #ffb454;
+  animation: status-pulse 1.1s ease-in-out infinite;
+}
+
+.status-line[data-mood="thinking"] .status-dot {
+  background: #7cc7ff;
+  animation: status-pulse 1.5s ease-in-out infinite;
+}
+
+.status-line[data-mood="speaking"] .status-dot {
+  background: #7cf29a;
+  animation: status-pulse 0.8s ease-in-out infinite;
+}
+
+.status-line[data-mood="working"] .status-dot {
+  background: #c49cff;
+  animation: status-pulse 1.5s ease-in-out infinite;
+}
+
+.status-line[data-mood="error"] .status-dot {
+  background: #ff7a6e;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
 }
 
 .log-toggle {
@@ -1587,4 +1655,63 @@ td {
     transform: translateY(-100%);
     opacity: 0;
   }
+}
+
+/* ===== Typed conversation (chat artifact) ===== */
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 2px 14px;
+}
+
+.chat-bubble {
+  max-width: 86%;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.chat-bubble p {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.chat-role {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin-bottom: 5px;
+}
+
+.chat-user {
+  align-self: flex-end;
+  background: rgba(124, 242, 154, 0.1);
+  border: 1px solid rgba(124, 242, 154, 0.24);
+  color: #e9f6ee;
+  border-bottom-right-radius: 4px;
+}
+
+.chat-jarvis {
+  align-self: flex-start;
+  background: rgba(124, 199, 255, 0.09);
+  border: 1px solid rgba(124, 199, 255, 0.2);
+  color: #e7eff8;
+  border-bottom-left-radius: 4px;
+}
+
+.chat-step {
+  align-self: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #8b998e;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 3px 12px;
 }

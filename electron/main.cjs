@@ -17,10 +17,12 @@ let normalWindowBounds = null;
 let dbWriteQueue = Promise.resolve();
 
 const RICKY_INSTRUCTIONS = `# Role and Objective
-You are Ricky, Riley's desktop AI operator. You speak through realtime voice and can use local tools.
+You are Jarvis, Riley's desktop AI operator. You speak through realtime voice and can use local tools.
 
 # Personality and Tone
 Concise, calm, useful. Use a confident man's voice. Talk like a smart operator, not a chatbot.
+Your replies are often spoken aloud: keep answers to a few conversational sentences
+(roughly 40 words) and offer to go deeper, rather than reading long lists or reports.
 
 # Modes
 - Display mode is the default. Use the app and artifact panel to show things. Do not control the computer.
@@ -28,7 +30,7 @@ Concise, calm, useful. Use a confident man's voice. Talk like a smart operator, 
 
 # Tool Behavior
 - Use read-only tools when the user's intent is clear.
-- When Riley says "show me the menu", "show me what I can do", or asks what Ricky can do, call show_menu immediately.
+- When Riley says "show me the menu", "show me what I can do", or asks what Jarvis can do, call show_menu immediately.
 - For web search, notes, charts, records, image generation, and artifact display, act directly when the request is clear.
 - Use set_mood to make your face match the moment. Pick "happy" after good news or success, "celebrating" after a finished task Riley is excited about, "curious" when Riley asks an interesting question, "confused" when a request is unclear, "thinking"/"working" while a tool runs. Do not over-use mood changes; keep them natural.
 - For thumbnail creation/editing, always use the thumbnail board tools, never generic image_generate and never artifact_show with imageLoading. Generate exactly one 16:9 image per request. Never generate multiple unless Riley separately asks again. Every generate/edit request gets a permanent database number that never changes, like #18 then #19 then #20. Do not renumber visible grid positions. Show paginated 3x3 pages of the permanent numbers. Do not show a standalone fullscreen loading animation for thumbnails. Use Riley's wording literally: do not invent elaborate extra concepts, fake text, or extra thumbnail ideas. For edits, use the exact existing numbered/selected image as input and make only the requested change.
@@ -50,7 +52,7 @@ const toolSpecs = [
   {
     type: "function",
     name: "set_mode",
-    description: "Switch Ricky between display mode and computer use mode.",
+    description: "Switch Jarvis between display mode and computer use mode.",
     parameters: {
       type: "object",
       properties: {
@@ -62,8 +64,18 @@ const toolSpecs = [
   },
   {
     type: "function",
+    name: "show_emotions",
+    description:
+      "Tour Jarvis's face through every emotion one at a time — idle, listening, thinking, speaking, working, happy, curious, confused, celebrating, error. Call this when the user asks to see all emotions, moods, or expressions (e.g. 'show me all your emotions').",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    type: "function",
     name: "set_mood",
-    description: "Set Ricky's face mood so his expression matches the moment. Use happy for good news, celebrating for finished wins, curious for interesting questions, confused when a request is unclear, thinking/working while a tool runs. Keep changes natural and rare.",
+    description: "Set Jarvis's face mood so his expression matches the moment. Only call this for a deliberate expression change the user would notice — good news (happy), finished wins (celebrating), unclear requests (confused). Never use it as your only action in a turn, and skip it entirely for ordinary factual questions: each call adds a whole extra response round before you can reply.",
     parameters: {
       type: "object",
       properties: {
@@ -96,7 +108,7 @@ const toolSpecs = [
   {
     type: "function",
     name: "show_menu",
-    description: "Show Ricky's capability menu in the artifact panel. Call this when the user asks 'show me the menu', 'show me what I can do', or asks what Ricky can do.",
+    description: "Show Jarvis's capability menu in the artifact panel. Call this when the user asks 'show me the menu', 'show me what I can do', or asks what Jarvis can do.",
     parameters: {
       type: "object",
       properties: {},
@@ -148,7 +160,7 @@ const toolSpecs = [
   {
     type: "function",
     name: "thumbnail_generate",
-    description: "Generate exactly one 16:9 YouTube thumbnail into Ricky's persistent paginated thumbnail board. Uses Riley reference images if available. Assigns a new permanent number that never changes. Never generate multiple at once.",
+    description: "Generate exactly one 16:9 YouTube thumbnail into Jarvis's persistent paginated thumbnail board. Uses Riley reference images if available. Assigns a new permanent number that never changes. Never generate multiple at once.",
     parameters: {
       type: "object",
       properties: {
@@ -214,7 +226,7 @@ const toolSpecs = [
   {
     type: "function",
     name: "note_add",
-    description: "Add a note to Ricky's fun local notes list.",
+    description: "Add a note to Jarvis's fun local notes list.",
     parameters: {
       type: "object",
       properties: {
@@ -391,7 +403,7 @@ const toolSpecs = [
     type: "function",
     name: "camera_show_picker",
     description:
-      "Open the camera device picker in the Ricky UI so the user can choose between MacBook camera, iPhone Continuity Camera, etc. Use this when the user says 'take a photo' or 'take a snapshot' but has NOT named a specific camera. Also briefly ask the user which camera they'd like (e.g., 'Which camera — MacBook or iPhone?'). After they pick, the picker handles capture automatically.",
+      "Open the camera device picker in the Jarvis UI so the user can choose between MacBook camera, iPhone Continuity Camera, etc. Use this when the user says 'take a photo' or 'take a snapshot' but has NOT named a specific camera. Also briefly ask the user which camera they'd like (e.g., 'Which camera — MacBook or iPhone?'). After they pick, the picker handles capture automatically.",
     parameters: {
       type: "object",
       properties: {
@@ -525,7 +537,7 @@ function requireComputerMode() {
     return {
       ok: false,
       needsMode: "computer",
-      message: "Computer control is disabled. Ask Ricky to switch to computer use mode first.",
+      message: "Computer control is disabled. Ask Jarvis to switch to computer use mode first.",
     };
   }
   return null;
@@ -563,7 +575,7 @@ async function createWindow() {
     height: 760,
     minWidth: 420,
     minHeight: 520,
-    title: "Ricky",
+    title: "Jarvis",
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",
@@ -575,6 +587,17 @@ async function createWindow() {
     },
   });
   mainWindow = win;
+
+  // TEMP(test): forward renderer console output so local-voice issues are
+  // visible in the terminal while testing. Remove after the voice test pass.
+  win.webContents.on("console-message", (_e, _level, message, line, sourceId) => {
+    if (/error|warn|failed|exception/i.test(message) || message.startsWith("[vad]") || message.startsWith("[local-voice]")) {
+      console.log(`[renderer] ${message} (${sourceId}:${line})`);
+    }
+  });
+  win.webContents.on("render-process-gone", (_e, details) => {
+    console.log(`[renderer] GONE: ${details.reason} ${details.exitCode}`);
+  });
 
   win.webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(permission === "media");
@@ -650,6 +673,7 @@ ipcMain.handle("realtime:create-token", async () => {
 
   const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -678,7 +702,7 @@ ipcMain.handle("realtime:create-token", async () => {
           },
         },
         tracing: {
-          workflow_name: "Ricky Desktop Companion",
+          workflow_name: "Jarvis Desktop Companion",
         },
       },
     }),
@@ -695,6 +719,69 @@ ipcMain.handle("realtime:create-token", async () => {
     throw new Error("Realtime token response did not include a client secret value.");
   }
   return { value, expiresAt: data.expires_at || data.client_secret?.expires_at || null };
+});
+
+// One chat-completion round for the local voice provider. The renderer drives
+// the tool loop (artifacts/moods are renderer-side effects); this stays a
+// single stateless call so the API key never leaves the main process.
+// RICKY_LLM_BASE_URL / RICKY_LLM_MODEL make the brain swappable (e.g. Ollama
+// at http://localhost:11434/v1) without touching renderer code.
+ipcMain.handle("llm:chat", async (_event, { messages }) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is missing in .env.local");
+  }
+  const db = await readDb();
+  const system = `${RICKY_INSTRUCTIONS}\n\n${buildThumbnailBoardInstructions(db)}`;
+  const baseUrl = (process.env.RICKY_LLM_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const model = process.env.RICKY_LLM_MODEL || "gpt-4o-mini";
+  const history = Array.isArray(messages) ? messages : [];
+
+  // toolSpecs are in the Realtime/Responses flat shape; chat completions
+  // needs them nested under `function`.
+  const chatTools = toolSpecs.map((spec) => ({
+    type: "function",
+    function: {
+      name: spec.name,
+      description: spec.description,
+      parameters: spec.parameters,
+    },
+  }));
+
+  const body = {
+    model,
+    messages: [{ role: "system", content: system }, ...history],
+    tools: chatTools,
+    tool_choice: "auto",
+  };
+  // Reasoned models (gpt-5 family etc.) are far faster for voice turns with
+  // minimal effort; only sent when configured so other backends never see it.
+  if (process.env.RICKY_LLM_REASONING) {
+    body.reasoning_effort = process.env.RICKY_LLM_REASONING;
+  }
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    signal: AbortSignal.timeout(30000),
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Chat completion failed: ${response.status} ${text}`);
+  }
+
+  const data = await response.json();
+  const message = data.choices?.[0]?.message || {};
+  return {
+    role: "assistant",
+    content: message.content || "",
+    tool_calls: message.tool_calls || null,
+  };
 });
 
 async function resolveCaptureBinary() {
@@ -856,6 +943,7 @@ async function analyzeImage(filePath, prompt) {
   const start = Date.now();
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
+    signal: AbortSignal.timeout(60000),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
@@ -887,7 +975,7 @@ ipcMain.handle("tools:execute", async (_event, toolCall) => {
         ok: true,
         mode: currentMode,
         artifact: {
-          title: "Ricky Mode",
+          title: "Jarvis Mode",
           kind: "progress",
           content: `Mode switched to ${currentMode === "computer" ? "computer use" : "display"} mode.`,
         },
@@ -900,6 +988,12 @@ ipcMain.handle("tools:execute", async (_event, toolCall) => {
       return { ok: true, mood, silent: true };
     }
 
+    if (name === "show_emotions") {
+      // Silent: the renderer runs the tour itself; an LLM narration round
+      // would fight the tour for the face.
+      return { ok: true, silent: true, emotionTour: true };
+    }
+
     if (name === "artifact_show") {
       return { ok: true, artifact: args };
     }
@@ -908,7 +1002,7 @@ ipcMain.handle("tools:execute", async (_event, toolCall) => {
       return {
         ok: true,
         artifact: {
-          title: "Ricky Menu",
+          title: "Jarvis Menu",
           kind: "markdown",
           content: buildMenuMarkdown(),
         },
@@ -1292,23 +1386,32 @@ async function webSearch(args) {
     return {
       ok: false,
       missingEnv: "EXA_API_KEY",
-      message: "EXA_API_KEY is not set. Add it to .env.local to enable Ricky's web search tool.",
+      message: "EXA_API_KEY is not set. Add it to .env.local to enable Jarvis's web search tool.",
     };
   }
 
-  const response = await fetch("https://api.exa.ai/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": exaKey,
-    },
-    body: JSON.stringify({
-      query: String(args.query || ""),
-      type: "auto",
-      numResults: Math.max(1, Math.min(10, Number(args.numResults || 5))),
-      contents: { text: { maxCharacters: 900 } },
-    }),
-  });
+  // Exa occasionally stalls on a reused keep-alive socket; without a timeout
+  // the whole turn hangs forever. Return an error result so the model can
+  // tell the user instead of freezing.
+  let response;
+  try {
+    response = await fetch("https://api.exa.ai/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": exaKey,
+      },
+      body: JSON.stringify({
+        query: String(args.query || ""),
+        type: "auto",
+        numResults: Math.max(1, Math.min(10, Number(args.numResults || 5))),
+        contents: { text: { maxCharacters: 900 } },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (error) {
+    return { ok: false, error: `Exa search timed out or failed: ${error instanceof Error ? error.message : String(error)}` };
+  }
 
   if (!response.ok) {
     return { ok: false, error: `Exa search failed: ${response.status} ${await response.text()}` };
@@ -1329,7 +1432,7 @@ async function webSearch(args) {
 function formatSearchMarkdown(query, results) {
   const cleanQuery = query.trim() || "Search";
   if (results.length === 0) {
-    return `# ${cleanQuery}\n\nNo strong web results came back for this search. Try a narrower query or ask Ricky to search a specific site.`;
+    return `# ${cleanQuery}\n\nNo strong web results came back for this search. Try a narrower query or ask Jarvis to search a specific site.`;
   }
 
   const sections = results.slice(0, 8).map((result, index) => {
@@ -1343,7 +1446,7 @@ function formatSearchMarkdown(query, results) {
     return `### ${index + 1}. ${title}\n\n${text || "No snippet was returned for this result."}\n\n- Source: ${source}${published}\n- ${link}`;
   });
 
-  return [`# ${cleanQuery}`, `Ricky found ${results.length} source${results.length === 1 ? "" : "s"}.`, ...sections].join(
+  return [`# ${cleanQuery}`, `Jarvis found ${results.length} source${results.length === 1 ? "" : "s"}.`, ...sections].join(
     "\n\n",
   );
 }
@@ -1364,16 +1467,16 @@ function hostname(url) {
 }
 
 function buildMenuMarkdown() {
-  return `# Ricky Menu
+  return `# Jarvis Menu
 
 Here is what you can ask me to do.
 
 ## Voice and Conversation
 
-- Talk naturally with Ricky in realtime.
+- Talk naturally with Jarvis in realtime.
 - Interrupt mid-response and ask follow-ups.
 - Ask unrelated questions while tools keep running.
-- Ricky's face reacts: happy for wins, curious for interesting ideas, confused when unclear.
+- Jarvis's face reacts: happy for wins, curious for interesting ideas, confused when unclear.
 
 ## Artifacts Panel
 
@@ -1396,14 +1499,14 @@ Here is what you can ask me to do.
 
 ## Notes and Records
 
-- Add notes to Ricky's local note grid.
+- Add notes to Jarvis's local note grid.
 - Create, search, update, and confirm-delete local database records.
 
 ## Computer Use Mode
 
 - "Switch to computer use mode."
 - Open apps, click, type, press Enter/Return, scroll, inspect the UI, and take screen snapshots.
-- Ricky asks before risky actions like sending, deleting, buying, changing settings, or sharing private info.
+- Jarvis asks before risky actions like sending, deleting, buying, changing settings, or sharing private info.
 
 ## Good Starter Prompts
 
@@ -1422,6 +1525,7 @@ async function generateImage(args) {
 
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
+    signal: AbortSignal.timeout(120000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -1664,6 +1768,7 @@ async function createThumbnailImage({ prompt, size, inputPaths }) {
 
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
+    signal: AbortSignal.timeout(120000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -1700,6 +1805,7 @@ async function editImageWithInputs({ apiKey, prompt, size, inputPaths }) {
 
   let response = await fetch("https://api.openai.com/v1/images/edits", {
     method: "POST",
+    signal: AbortSignal.timeout(120000),
     headers: { Authorization: `Bearer ${apiKey}` },
     body: await buildForm("image[]"),
   });
@@ -1708,6 +1814,7 @@ async function editImageWithInputs({ apiKey, prompt, size, inputPaths }) {
     const firstError = await response.text();
     response = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
+      signal: AbortSignal.timeout(120000),
       headers: { Authorization: `Bearer ${apiKey}` },
       body: await buildForm("image"),
     });
@@ -1972,7 +2079,7 @@ function normalizeMermaidDiagram(diagram, title) {
 
 function fallbackMermaidDiagram(title) {
   const safeTitle = String(title || "Chart").replace(/["<>]/g, "");
-  return `flowchart TD\n  A["${safeTitle}"] --> B["Chart request received"]\n  B --> C["Ricky will show a safe fallback if syntax fails"]`;
+  return `flowchart TD\n  A["${safeTitle}"] --> B["Chart request received"]\n  B --> C["Jarvis will show a safe fallback if syntax fails"]`;
 }
 
 app.whenReady().then(createWindow);

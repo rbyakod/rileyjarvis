@@ -1,6 +1,6 @@
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import mermaid from "mermaid";
-import type { RickyArtifact } from "../vite-env";
+import type { ChatArtifactMessage, RickyArtifact } from "../vite-env";
 
 type ArtifactPanelProps = {
   artifact: RickyArtifact | null;
@@ -117,12 +117,43 @@ export function ArtifactPanel({ artifact, visible, fullscreen, onToggleVisible, 
 function EmptyArtifact() {
   return (
     <div className="empty-artifact">
-      <p>Ask Ricky to show web results, charts, notes, records, code, images, or progress here.</p>
+      <p>Ask Jarvis to show web results, charts, notes, records, code, images, or progress here.</p>
+    </div>
+  );
+}
+
+/** Typed conversation: bubbles for you and Jarvis, pills for tool steps. */
+function ChatLog({ messages }: { messages: ChatArtifactMessage[] }) {
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
+
+  return (
+    <div className="chat-log">
+      {messages.map((message) =>
+        message.role === "tool" ? (
+          <div className="chat-step" key={message.id}>
+            {message.text}
+          </div>
+        ) : (
+          <div className={`chat-bubble chat-${message.role}`} key={message.id}>
+            <span className="chat-role">{message.role === "user" ? "You" : "Jarvis"}</span>
+            <p>{message.text}</p>
+          </div>
+        ),
+      )}
+      <div ref={endRef} />
     </div>
   );
 }
 
 function renderArtifact(artifact: RickyArtifact, mermaidState: MermaidState) {
+  if (artifact.kind === "chat") {
+    return <ChatLog messages={artifact.messages || []} />;
+  }
+
   if (artifact.kind === "table") {
     return <JsonTable content={artifact.content} />;
   }
@@ -137,7 +168,7 @@ function renderArtifact(artifact: RickyArtifact, mermaidState: MermaidState) {
         <div className="mermaid-output" dangerouslySetInnerHTML={{ __html: mermaidState.svg }} />
         {mermaidState.error ? (
           <details className="mermaid-repair">
-            <summary>Ricky repaired this chart so it would still display.</summary>
+            <summary>Jarvis repaired this chart so it would still display.</summary>
             <p>The original Mermaid syntax did not parse, so a safe fallback chart was shown.</p>
             <pre>{mermaidState.source}</pre>
           </details>
@@ -156,7 +187,7 @@ function renderArtifact(artifact: RickyArtifact, mermaidState: MermaidState) {
         <img className="artifact-image" src={src} alt={artifact.title} />
         {artifact.analysis ? (
           <div className="image-analysis-card">
-            <span className="image-analysis-eyebrow">Ricky sees</span>
+            <span className="image-analysis-eyebrow">Jarvis sees</span>
             <p>{artifact.analysis}</p>
           </div>
         ) : null}
@@ -261,7 +292,7 @@ function ThumbnailBoard({ content }: { content: string }) {
         </div>
       ) : (
         <div className="thumbnail-empty">
-          <p>Riley reference image loaded. Ask Ricky: “Generate a 16:9 thumbnail of me about Cursor agents.”</p>
+          <p>Riley reference image loaded. Ask Jarvis: “Generate a 16:9 thumbnail of me about Cursor agents.”</p>
         </div>
       )}
     </section>

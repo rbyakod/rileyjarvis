@@ -14,3 +14,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Local-voice runtime assets (copied from node_modules by scripts/copy-voice-assets.mjs)
+public/vendor/

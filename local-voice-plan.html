@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ricky · Local Voice Dossier — Kokoro TTS + Whisper STT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f0c;
+    --panel: #141812;
+    --panel-2: #1a2018;
+    --line: #2a3327;
+    --ink: #e9eee4;
+    --dim: #9aa694;
+    --faint: #6b7663;
+    --tts: #7cf29a;      /* local TTS — phosphor green */
+    --tts-deep: #2f5c3c;
+    --stt: #ffb454;      /* local STT — amber */
+    --stt-deep: #5c452a;
+    --cloud: #8fb7d6;    /* anything that still touches the network */
+    --cloud-deep: #2d4256;
+    --red: #ff7a6e;
+    --serif: "Hanken Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+    --disp: "Bricolage Grotesque", "Avenir Next Condensed", sans-serif;
+    --mono: "Spline Sans Mono", "SF Mono", "Menlo", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle, #1c231a 1px, transparent 1px);
+    background-size: 26px 26px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 16.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 28px 120px; }
+
+  /* ── masthead ─────────────────────────────── */
+  header.masthead {
+    border-bottom: 1px solid var(--line);
+    padding: 56px 0 34px;
+    margin-bottom: 48px;
+    position: relative;
+  }
+  .kicker {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--tts); margin-bottom: 18px;
+  }
+  .kicker .dot { color: var(--stt); }
+  h1 {
+    font-family: var(--disp); font-weight: 800; font-size: clamp(38px, 6vw, 62px);
+    line-height: 1.02; letter-spacing: -0.015em; margin-bottom: 22px;
+  }
+  h1 em { font-style: normal; color: var(--tts); }
+  h1 .swap { color: var(--dim); font-weight: 400; }
+  .standfirst { font-size: 19px; color: var(--dim); max-width: 46em; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 26px; margin-top: 30px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--faint);
+  }
+  .meta-row b { color: var(--dim); font-weight: 500; }
+
+  /* ── sections ─────────────────────────────── */
+  section { margin-bottom: 72px; }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 26px; }
+  .sec-no {
+    font-family: var(--mono); font-size: 13px; color: var(--bg);
+    background: var(--tts); padding: 2px 9px; border-radius: 3px; font-weight: 600;
+  }
+  .sec-no.amber { background: var(--stt); }
+  h2 {
+    font-family: var(--disp); font-weight: 800; font-size: 30px;
+    letter-spacing: -0.01em; line-height: 1.1;
+  }
+  h3 {
+    font-family: var(--disp); font-weight: 600; font-size: 20px;
+    margin: 34px 0 12px; letter-spacing: -0.005em;
+  }
+  p { margin-bottom: 14px; color: #d7ddd0; }
+  p b, li b { color: var(--ink); }
+  ul, ol { margin: 0 0 16px 22px; color: #d7ddd0; }
+  li { margin-bottom: 7px; }
+  a { color: var(--tts); text-decoration: none; border-bottom: 1px solid var(--tts-deep); }
+  a:hover { border-bottom-color: var(--tts); }
+  code {
+    font-family: var(--mono); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; color: #cfe6d2;
+  }
+
+  /* ── panels & callouts ────────────────────── */
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 26px 30px; margin: 22px 0;
+  }
+  .verdict { border-left: 4px solid var(--tts); background: linear-gradient(90deg, #17201a, var(--panel)); }
+  .verdict .tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--tts); margin-bottom: 12px;
+  }
+  .callout-warn { border-left: 4px solid var(--stt); }
+  .callout-warn .tag { color: var(--stt); }
+
+  /* ── tables ───────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+  th {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--faint); text-align: left; padding: 10px 14px; border-bottom: 2px solid var(--line);
+  }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; color: #d7ddd0; }
+  tr:last-child td { border-bottom: none; }
+  td .path { font-family: var(--mono); font-size: 12.5px; color: var(--tts); white-space: nowrap; }
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: 11px; padding: 1px 8px;
+    border-radius: 20px; border: 1px solid; white-space: nowrap;
+  }
+  .pill.g { color: var(--tts); border-color: var(--tts-deep); background: rgba(124,242,154,0.06); }
+  .pill.a { color: var(--stt); border-color: var(--stt-deep); background: rgba(255,180,84,0.06); }
+  .pill.c { color: var(--cloud); border-color: var(--cloud-deep); background: rgba(143,183,214,0.06); }
+
+  /* ── flow diagrams ────────────────────────── */
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin: 22px 0; }
+  .node {
+    flex: 1 1 120px; min-width: 118px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); padding: 12px 12px 10px; text-align: center; position: relative;
+  }
+  .node .t { font-family: var(--mono); font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+  .node .s { font-size: 12px; color: var(--faint); margin-top: 5px; line-height: 1.35; }
+  .node.tts { border-color: var(--tts-deep); } .node.tts .t { color: var(--tts); }
+  .node.stt { border-color: var(--stt-deep); } .node.stt .t { color: var(--stt); }
+  .node.cloud { border-color: var(--cloud-deep); } .node.cloud .t { color: var(--cloud); }
+  .node.bundle { border: 1px dashed var(--cloud-deep); background: rgba(143,183,214,0.05); }
+  .arrow {
+    align-self: center; color: var(--faint); font-family: var(--mono); font-size: 17px;
+    flex: 0 0 auto; padding: 0 2px;
+  }
+  .flow-label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--faint); margin: 28px 0 -8px;
+  }
+  .lane { border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin: 14px 0; background: rgba(20,24,18,0.6); }
+
+  /* ── code blocks ──────────────────────────── */
+  pre {
+    background: #10140e; border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 22px; overflow-x: auto; margin: 16px 0 24px; font-size: 13.5px; line-height: 1.6;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; color: #cfe0c8; }
+  .cm { color: #6f7d68; }          /* comment */
+  .kw { color: var(--stt); }       /* keyword */
+  .st { color: var(--tts); }       /* string */
+  .fn { color: #c8e6f0; }          /* function-ish */
+  .code-title {
+    font-family: var(--mono); font-size: 12px; color: var(--faint); margin: 26px 0 -10px;
+  }
+  .code-title b { color: var(--dim); font-weight: 500; }
+
+  /* ── option cards ─────────────────────────── */
+  .opt { border: 1px solid var(--line); border-radius: 12px; margin: 26px 0; overflow: hidden; }
+  .opt-head {
+    display: flex; align-items: baseline; gap: 14px; padding: 18px 26px;
+    background: var(--panel-2); border-bottom: 1px solid var(--line);
+  }
+  .opt-head .badge {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--bg);
+    padding: 2px 10px; border-radius: 4px;
+  }
+  .opt-head h3 { margin: 0; font-size: 21px; }
+  .opt.recommended { border-color: var(--tts-deep); box-shadow: 0 0 0 1px var(--tts-deep); }
+  .opt-body { padding: 8px 26px 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 14px 0; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .grid2 .cell h4 {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .cell.plus h4 { color: var(--tts); } .cell.minus h4 { color: var(--red); }
+  .grid2 .cell { background: rgba(16,20,14,0.7); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .grid2 ul { margin-bottom: 0; font-size: 14.5px; }
+
+  .phase { display: flex; gap: 20px; padding: 22px 0; border-top: 1px solid var(--line); }
+  .phase:first-of-type { border-top: none; }
+  .phase .no {
+    font-family: var(--disp); font-weight: 800; font-size: 30px; color: var(--tts);
+    min-width: 58px; line-height: 1;
+  }
+  .phase h4 { font-family: var(--disp); font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .phase .accept {
+    margin-top: 10px; font-size: 14px; color: var(--dim); border-left: 3px solid var(--tts-deep);
+    padding-left: 12px;
+  }
+  .phase .accept b { color: var(--tts); font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; display: block; margin-bottom: 3px; }
+
+  footer { border-top: 1px solid var(--line); padding-top: 30px; color: var(--faint); font-size: 13.5px; }
+  footer .src-list { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 30px; margin-top: 12px; }
+  @media (max-width: 700px) { footer .src-list { grid-template-columns: 1fr; } }
+  @media print {
+    body { background: #fff; color: #111; }
+    .panel, .node, pre, .opt, .lane { background: #f6f6f4; border-color: #ccc; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="kicker">RICKY · LOCAL VOICE DOSSIER <span class="dot">◆</span> READ BEFORE TOUCHING CODE</div>
+  <h1>Cut the cord on voice:<br>
+    <span class="swap">OpenAI Realtime →</span> <em>Kokoro</em> <span class="swap">+</span> <em style="color:var(--stt)">Whisper</em>
+  </h1>
+  <p class="standfirst">
+    A migration plan for running Ricky's speech-to-text and text-to-speech entirely on this machine —
+    Apple M3 Pro, macOS 26 — with no audio byte ever leaving the laptop. Research document only; no code changed.
+  </p>
+  <div class="meta-row">
+    <span><b>repo</b> rileyjarvis @ main (463ecb0)</span>
+    <span><b>target hw</b> Apple M3 Pro · arm64</span>
+    <span><b>date</b> 2026-08-20</span>
+    <span><b>status</b> implemented — local mode shipped (Phases 1–3); toggle lives in the control strip</span>
+  </div>
+</header>
+
+<!-- ══════════ 00 ══════════ -->
+<section id="tldr">
+  <div class="panel verdict">
+    <div class="tag">◆ 00 · The verdict, up front</div>
+    <p style="font-size:17.5px">
+      <b>The critical finding first:</b> this app has no separate TTS or STT calls to swap out. The entire
+      voice feature is a <b>single OpenAI Realtime WebRTC session</b> (<code>gpt-realtime-2</code>,
+      <code>src/lib/realtime.ts</code> + <code>electron/main.cjs:643-698</code>). Cloud VAD, cloud Whisper,
+      cloud LLM and cloud TTS all arrive <b>bundled</b> over that one connection. Going local therefore does
+      not mean replacing two API calls — it means <b>assembling the voice loop yourself</b> from local parts:
+    </p>
+    <div class="flow" style="margin-top:18px">
+      <div class="node stt"><div class="t">Silero VAD</div><div class="s">turn detection<br>~2 MB, in-renderer</div></div>
+      <div class="arrow">→</div>
+      <div class="node stt"><div class="t">Whisper</div><div class="s">speech → text<br>local STT</div></div>
+      <div class="arrow">→</div>
+      <div class="node cloud"><div class="t">LLM</div><div class="s">chat + 30 tools<br>(stays swappable)</div></div>
+      <div class="arrow">→</div>
+      <div class="node tts"><div class="t">Kokoro</div><div class="s">text → speech<br>82M, Apache-2.0</div></div>
+    </div>
+    <p>
+      <b>Recommended route:</b> all-JS, in the Electron renderer — <code>kokoro-js</code> (WebGPU) for TTS,
+      <code>@huggingface/transformers</code> (ONNX Whisper, WebGPU) for STT, <code>@ricky0123/vad-web</code>
+      (Silero) for turn detection, behind a new <code>VoiceProvider</code> seam so the existing Realtime
+      client stays as a fallback toggle. LLM remains a plain chat-completions call for now (Phase&nbsp;4 can
+      swap in Ollama for 100% offline). Everything downloads on first run (~250–450 MB), then works with
+      the network unplugged.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════ 01 ══════════ -->
+<section id="today">
+  <div class="sec-head"><span class="sec-no">01</span><h2>How voice works today</h2></div>
+  <p>
+    One class owns the whole voice stack: <code>RickyRealtimeClient</code> (<code>src/lib/realtime.ts</code>,
+    467 lines). The main process mints an ephemeral Realtime token over IPC so the API key never reaches the
+    renderer; the renderer then speaks WebRTC directly to OpenAI:
+  </p>
+
+  <div class="flow-label">current pipeline — everything inside the dashed box is OpenAI's, not ours</div>
+  <div class="lane">
+    <div class="flow">
+      <div class="node"><div class="t">getUserMedia</div><div class="s">mic track<br><span class="path">realtime.ts:103</span></div></div>
+      <div class="arrow">→</div>
+      <div class="node bundle"><div class="t">OpenAI Realtime</div><div class="s">semantic VAD + Whisper STT + gpt-realtime-2 + TTS voice “cedar”, over WebRTC <span class="path">realtime.ts:125</span></div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="t">&lt;audio&gt;</div><div class="s">autoplay element<br><span class="path">realtime.ts:95</span></div></div>
+      <div class="arrow">↘</div>
+      <div class="node"><div class="t">AnalyserNode</div><div class="s">viseme meter →<br>MouthShape <span class="path">realtime.ts:319</span></div></div>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>Fact</th><th>Value</th><th>Where</th></tr>
+    <tr><td>Realtime model</td><td><code>gpt-realtime-2</code>, voice <code>cedar</code>, output audio only</td><td><span class="path">electron/main.cjs:661,677</span></td></tr>
+    <tr><td>Turn detection</td><td><code>semantic_vad</code> (server-side) + barge-in <code>interrupt_response</code></td><td><span class="path">electron/main.cjs:667-675</span></td></tr>
+    <tr><td>STT result</td><td>event <code>conversation.item.input_audio_transcription.completed</code></td><td><span class="path">src/lib/realtime.ts:223</span></td></tr>
+    <tr><td>Tool calls</td><td>30 function tools over the <code>oai-events</code> data channel → IPC <code>tools:execute</code></td><td><span class="path">src/lib/realtime.ts:244-300</span></td></tr>
+    <tr><td>Provider interface (de-facto)</td><td><code>RealtimeCallbacks</code>: onMood, onTranscript, onMouthShape, onConnectionState, onStatus… + <code>connect/disconnect/sendText</code></td><td><span class="path">src/lib/realtime.ts:30-39</span></td></tr>
+    <tr><td>SDK</td><td>none — raw <code>fetch</code> in both processes; base URLs hardcoded</td><td><span class="path">realtime.ts:66</span>, <span class="path">main.cjs:651</span></td></tr>
+    <tr><td>Non-voice OpenAI usage (out of scope here)</td><td><code>gpt-4o</code> vision, <code>gpt-image-2</code>, Exa search</td><td><span class="path">main.cjs:821,1423,1289</span></td></tr>
+  </table>
+</section>
+
+<!-- ══════════ 02 ══════════ -->
+<section id="mapping">
+  <div class="sec-head"><span class="sec-no amber">02</span><h2>What “local” must re-create</h2></div>
+  <p>Each thing the Realtime session silently does for us today needs an explicit local counterpart:</p>
+  <table>
+    <tr><th>Realtime gives us…</th><th>Local replacement</th><th>Notes</th></tr>
+    <tr>
+      <td><code>semantic_vad</code> turn detection + <code>speech_started/stopped</code> events</td>
+      <td><span class="pill a">Silero VAD</span> via <code>@ricky0123/vad-web</code></td>
+      <td>ONNX model ~2 MB, runs in renderer on 16 kHz frames. Gives <code>onSpeechStart</code> / <code>onSpeechEnd(audio)</code> — the audio arrives <b>already resampled to 16 kHz Float32</b>, which is exactly Whisper's diet. (It's an energy+model VAD, not “semantic” — slightly dumber turn boundaries, tuned with a silence threshold.)</td>
+    </tr>
+    <tr>
+      <td>Server-side Whisper transcription</td>
+      <td><span class="pill a">Whisper</span> — ONNX in renderer (transformers.js) or whisper.cpp native</td>
+      <td>Per-utterance (not streaming) transcription of VAD-segmented audio. VAD-gating avoids Whisper's classic silence-hallucination problem.</td>
+    </tr>
+    <tr>
+      <td>gpt-realtime-2 as the conversational brain with 30 tools</td>
+      <td><span class="pill c">chat completions</span> with the same instructions + tool specs</td>
+      <td>Not part of “voice” per se, but the loop must exist somewhere. Keep OpenAI chat for now (new <code>llm:chat</code> IPC in main, key stays in main) — or Ollama later for full offline.</td>
+    </tr>
+    <tr>
+      <td>TTS voice <code>cedar</code>, streamed as audio deltas</td>
+      <td><span class="pill g">Kokoro-82M</span> via <code>kokoro-js</code></td>
+      <td>82M-param TTS, Apache-2.0 weights, 24 kHz output, faster-than-real-time on M3 Pro. Sentence-level generation instead of token streaming; visemes keep working because they're driven by output-audio energy, not by Realtime events.</td>
+    </tr>
+    <tr>
+      <td>Barge-in (<code>interrupt_response: true</code>)</td>
+      <td>our own: VAD start while speaking → stop source node + abort LLM fetch</td>
+      <td>~15 lines. Mic already runs with <code>echoCancellation: true</code> (<span class="path">realtime.ts:105</span>), so Ricky's own voice won't self-trigger the VAD.</td>
+    </tr>
+    <tr>
+      <td>Mood machine (listening/thinking/speaking/idle from server events)</td>
+      <td>our own state flips at each stage boundary</td>
+      <td>The four stages map 1:1 to VAD start → transcribe done → TTS playing → playback ended.</td>
+    </tr>
+  </table>
+
+  <div class="panel callout-warn">
+    <div class="tag">◆ gotcha worth knowing before you start</div>
+    <p>
+      The typed-input path (<code>sendText</code>, <span class="path">realtime.ts:167</span>) is a convenient
+      backdoor for phasing: it already proves text → brain → response works without mic audio. That's why the
+      plan below builds <b>local TTS first</b> (typed input only), then adds the mic loop — you get a talking
+      local Ricky before you ever fight a VAD.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════ 03 ══════════ -->
+<section id="parts">
+  <div class="sec-head"><span class="sec-no">03</span><h2>The parts bin</h2></div>
+
+  <h3 style="color:var(--tts)">Kokoro — local TTS</h3>
+  <table>
+    <tr><th>Package</th><th>Runs where</th><th>Why / why not</th></tr>
+    <tr><td><b><code>kokoro-js</code></b> <span class="pill g">recommended</span></td><td>Renderer or Node — pure JS/WASM via Transformers.js; WebGPU or wasm backend</td><td>Purpose-built wrapper for <code>onnx-community/Kokoro-82M-v1.0-ONNX</code>. One <code>from_pretrained</code> + one <code>generate()</code>. q8 ≈ 90 MB, fp32 ≈ 330 MB. No native build, no server — the whole point.</td></tr>
+    <tr><td><code>kokoro-onnx</code> (Python)</td><td>Python sidecar</td><td>Reported faster-than-real-time on M1; only worth it if you already want a Python sidecar for MLX Whisper.</td></tr>
+    <tr><td><code>Kokoro-FastAPI</code></td><td>Docker / uv local server, port 8880</td><td>Full OpenAI-compatible <code>/v1/audio/speech</code> (mp3/wav/opus/flac/pcm, streaming). First-token &lt; 1 s on an M3 Pro per its README. Adds a service dependency Docker keeps alive — Option C material.</td></tr>
+    <tr><td><code>mlx-audio</code> / hexgrad <code>kokoro</code> (pip)</td><td>Python, Apple MLX</td><td>Max quality/speed on this exact chip, but drags a Python runtime into an Electron app. Fine as a sidecar experiment; wrong default.</td></tr>
+  </table>
+
+  <h3 style="color:var(--stt)">Whisper — local STT</h3>
+  <table>
+    <tr><th>Package</th><th>Runs where</th><th>Why / why not</th></tr>
+    <tr><td><b>transformers.js</b> + ONNX Whisper <span class="pill a">recommended</span></td><td>Renderer, same runtime as kokoro-js</td><td><code>pipeline("automatic-speech-recognition", "onnx-community/whisper-base", …)</code>. Shares the ONNX Runtime Web stack already needed for Kokoro — one dependency, one cache, one device story (WebGPU + wasm fallback). The reference <code>whisper-web</code> demo proves the pattern.</td></tr>
+    <tr><td><code>whisper.cpp</code> binary / <code>smart-whisper</code> / <code>nodejs-whisper</code></td><td>Native — child process or Node addon in Electron main</td><td>Fastest CPU path (Metal-accelerated), battle-tested. Costs: native packaging (electron-rebuild, asarUnpack), model management, IPC for audio. The Option B upgrade if in-renderer Whisper is too slow.</td></tr>
+    <tr><td><code>mlx-whisper</code></td><td>Python sidecar</td><td>~3× faster than whisper.cpp on Apple Silicon (per Simon Willison's benchmark) — the outright speed king on this machine, at the price of a Python sidecar.</td></tr>
+    <tr><td>Speaches (faster-whisper-server)</td><td>Local OpenAI-compatible server</td><td>OpenAI-style transcription + Kokoro TTS + even a WebSocket realtime API — architecturally the closest thing to “self-hosted Realtime”. But it's a service to run (Docker/uv), not an app-internal component.</td></tr>
+    <tr><td>whisper.cpp <code>server</code> / LocalAI</td><td>Local HTTP server</td><td>whisper.cpp's own server exposes <code>/inference</code> (file-upload, not OpenAI-shaped); LocalAI wraps Whisper into true <code>/v1/audio/transcriptions</code>. Server-route options only.</td></tr>
+  </table>
+
+  <h3>Model size cheat-sheet (approximate download / disk)</h3>
+  <table>
+    <tr><th>Model</th><th>Size</th><th>Notes</th></tr>
+    <tr><td>Silero VAD</td><td>~2 MB</td><td>bundled with <code>@ricky0123/vad-web</code></td></tr>
+    <tr><td>Kokoro-82M ONNX q8 / fp32</td><td>~90 MB / ~330 MB</td><td>+ ~0.3 MB per extra voice; start q8, it's the sweet spot</td></tr>
+    <tr><td>Whisper tiny.en / base / small (ONNX q8)</td><td>~42 / ~80 / ~250 MB</td><td>base (multilingual) is the default pick; <code>.en</code> variants are English-only and slightly sharper for US English</td></tr>
+    <tr><td>Whisper large-v3-turbo</td><td>~800 MB (ONNX q4)</td><td>the accuracy upgrade; M3 Pro handles it, but first-utterance latency grows</td></tr>
+  </table>
+</section>
+
+<!-- ══════════ 04 ══════════ -->
+<section id="options">
+  <div class="sec-head"><span class="sec-no">04</span><h2>Three ways to wire it in</h2></div>
+
+  <div class="opt recommended">
+    <div class="opt-head"><span class="badge" style="background:var(--tts)">A</span><h3>All-JS in the renderer</h3><span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--tts)">◆ RECOMMENDED</span></div>
+    <div class="opt-body">
+      <p>kokoro-js + transformers.js Whisper + Silero VAD, all via ONNX Runtime Web (WebGPU on this M3 Pro, wasm fallback). No child processes, no Docker, no Python. New dependency set is three npm packages.</p>
+      <div class="grid2">
+        <div class="cell plus"><h4>Pros</h4><ul>
+          <li>One runtime story; models cached in the renderer's cache dir after first download</li>
+          <li>Zero packaging pain — ships like any other JS dep</li>
+          <li>Provider lives next to <code>realtime.ts</code> and drives the same callbacks</li>
+          <li>Truly offline after first run</li>
+        </ul></div>
+        <div class="cell minus"><h4>Cons</h4><ul>
+          <li>Whisper-on-WASM is the slowest Whisper variant (WebGPU recovers most of it — benchmark in Phase 0)</li>
+          <li>~250–450 MB first-run download needs progress UI</li>
+          <li>WebGPU in Electron needs a capability check + wasm fallback path</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-head"><span class="badge" style="background:var(--stt)">B</span><h3>Native engines in the main process</h3></div>
+    <div class="opt-body">
+      <p>whisper.cpp (via <code>smart-whisper</code> addon or a spawned binary, Metal-accelerated) for STT; Kokoro via kokoro-js on Node's CPU backend or a small Python sidecar. Audio crosses the existing preload bridge as ArrayBuffers.</p>
+      <div class="grid2">
+        <div class="cell plus"><h4>Pros</h4><ul>
+          <li>Fastest STT outside MLX; whisper.cpp + Metal is excellent on Apple Silicon</li>
+          <li>Renderer stays thin — heavy inference off the UI thread</li>
+        </ul></div>
+        <div class="cell minus"><h4>Cons</h4><ul>
+          <li>Native module rebuilds against Electron's ABI; <code>asarUnpack</code> for <code>.node</code>/binaries/models</li>
+          <li>More moving parts to sign, notarize, and debug</li>
+          <li>Premature until Option A is measured and found wanting</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-head"><span class="badge" style="background:var(--cloud)">C</span><h3>Local OpenAI-compatible servers</h3></div>
+    <div class="opt-body">
+      <p>Run <a href="https://github.com/remsky/Kokoro-FastAPI">Kokoro-FastAPI</a> (TTS, <code>/v1/audio/speech</code>, &lt;1 s first token on M3 Pro) and Speaches or LocalAI (STT, <code>/v1/audio/transcriptions</code>); point the app at <code>localhost</code>. Least new app code per capability — but the loop (VAD, turn-taking, barge-in) is still yours to build, so the saving is smaller than it looks.</p>
+      <div class="grid2">
+        <div class="cell plus"><h4>Pros</h4><ul>
+          <li>Battle-tested servers; OpenAI-shaped requests; swappable engines behind ports</li>
+          <li>Models live outside the app; renderer changes stay tiny</li>
+        </ul></div>
+        <div class="cell minus"><h4>Cons</h4><ul>
+          <li>“Completely local” now includes “keep two services running” — worst daily-driver ergonomics</li>
+          <li>Docker on macOS adds overhead; uv/Python adds a runtime to install</li>
+          <li>File-upload HTTP round-trips add latency vs in-process</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <tr><th></th><th>A · in-renderer JS</th><th>B · native in main</th><th>C · local servers</th></tr>
+    <tr><td><b>Voice latency</b></td><td>good (WebGPU) / OK (wasm)</td><td><b>best</b></td><td>good, +HTTP hop</td></tr>
+    <tr><td><b>Packaging</b></td><td><b>trivial</b></td><td>hard (native modules)</td><td>n/a (external)</td></tr>
+    <tr><td><b>Code churn</b></td><td>moderate, contained</td><td>moderate + IPC</td><td>small app-side, ops outside</td></tr>
+    <tr><td><b>Offline after setup</b></td><td><b>yes</b></td><td><b>yes</b></td><td>yes, if services auto-start</td></tr>
+    <tr><td><b>Distribution size</b></td><td>+~0.5 GB models (cached)</td><td>+models +binaries</td><td>app stays small</td></tr>
+  </table>
+
+  <p><b>Decision rule:</b> build A. If renderer Whisper latency disappoints after Phase 0's benchmark, only the STT
+  box swaps to B (whisper.cpp) — the provider seam keeps that a local change. C is what you'd pick if Ricky ever
+  becomes a fleet service instead of a desktop app.</p>
+</section>
+
+<!-- ══════════ 05 ══════════ -->
+<section id="architecture">
+  <div class="sec-head"><span class="sec-no">05</span><h2>Target architecture (Option A)</h2></div>
+
+  <div class="flow-label">local voice loop — green = local TTS, amber = local STT, blue = still cloud (swappable)</div>
+  <div class="lane">
+    <div class="flow">
+      <div class="node"><div class="t">Mic</div><div class="s">getUserMedia<br>echoCancel: on</div></div>
+      <div class="arrow">→</div>
+      <div class="node stt"><div class="t">Silero VAD</div><div class="s">@ricky0123/vad-web<br>16 kHz segments</div></div>
+      <div class="arrow">→</div>
+      <div class="node stt"><div class="t">Whisper ONNX</div><div class="s">transformers.js<br>webgpu / q8</div></div>
+      <div class="arrow">→</div>
+      <div class="node cloud"><div class="t">LLM chat</div><div class="s">IPC llm:chat →<br>chat + tools loop</div></div>
+      <div class="arrow">→</div>
+      <div class="node tts"><div class="t">Kokoro</div><div class="s">kokoro-js q8<br>24 kHz Float32</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="t">AudioContext</div><div class="s">BufferSource →<br>Analyser → mouth</div></div>
+    </div>
+  </div>
+
+  <p>The seam: <code>App.tsx:46-72</code> currently constructs <code>RickyRealtimeClient</code> directly. Instead it picks
+  from a <code>VoiceProvider</code> interface shaped exactly like today's de-facto surface, so the face, transcript
+  list, artifacts and tool IPC don't change at all:</p>
+
+  <div class="code-title"><b>src/lib/voice-provider.ts</b> — new file, ~20 lines</div>
+  <pre><code><span class="cm">// The contract both providers satisfy. Callbacks match RealtimeCallbacks</span>
+<span class="cm">// (realtime.ts:30-39) so App.tsx keeps one wiring block for both.</span>
+<span class="kw">export interface</span> <span class="fn">VoiceProvider</span> {
+  connect(): <span class="fn">Promise</span>&lt;<span class="kw">void</span>&gt;;
+  disconnect(): <span class="kw">void</span>;
+  sendText(text: string): <span class="fn">Promise</span>&lt;<span class="kw">void</span>&gt;;
+}
+<span class="cm">// RickyRealtimeClient          → existing cloud session, untouched (fallback)</span>
+<span class="cm">// LocalVoiceProvider (new)     → Silero + Whisper + LLM-chat + Kokoro</span>
+<span class="cm">// Selection: RICKY_VOICE=local|realtime env, or a row in data/ricky-db.json</span></code></pre>
+
+  <h3>The loop, in code sketches</h3>
+
+  <div class="code-title"><b>1 · Mic → VAD → Whisper</b> — the entire STT side is two objects</div>
+  <pre><code><span class="kw">import</span> { MicVAD } <span class="kw">from</span> <span class="st">"@ricky0123/vad-web"</span>;
+<span class="kw">import</span> { pipeline } <span class="kw">from</span> <span class="st">"@huggingface/transformers"</span>;
+
+<span class="cm">// VAD owns the mic. onSpeechEnd hands us Float32Array @ 16 kHz — exactly</span>
+<span class="cm">// what Whisper wants, so no AudioWorklet/resampling code is needed.</span>
+<span class="kw">this</span>.vad = <span class="kw">await</span> MicVAD.new({
+  stream: <span class="kw">await</span> navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: <span class="kw">true</span>, noiseSuppression: <span class="kw">true</span>, autoGainControl: <span class="kw">true</span> },
+  }),
+  onSpeechStart: () =&gt; <span class="kw">this</span>.bargeIn(),          <span class="cm">// user talks mid-reply → interrupt</span>
+  onSpeechEnd:   (audio) =&gt; <span class="kw">this</span>.transcribe(audio),
+});
+
+<span class="cm">// Whisper, WebGPU with automatic wasm/q8 fallback:</span>
+<span class="kw">this</span>.asr = <span class="kw">await</span> pipeline(<span class="st">"automatic-speech-recognition"</span>,
+  <span class="st">"onnx-community/whisper-base"</span>, { dtype: <span class="st">"q8"</span>, device: <span class="st">"webgpu"</span> });
+
+<span class="kw">async</span> <span class="fn">transcribe</span>(audio: Float32Array) {
+  <span class="kw">this</span>.callbacks.onMood?.(<span class="st">"thinking"</span>);
+  <span class="kw">const</span> { text } = <span class="kw">await</span> <span class="kw">this</span>.asr(audio, { chunk_length_s: 30, stride_length_s: 5 });
+  <span class="kw">if</span> (text?.trim()) {
+    <span class="kw">this</span>.callbacks.onTranscript?.({ role: <span class="st">"user"</span>, text });   <span class="cm">// same shape as realtime.ts:223-227</span>
+    <span class="kw">await</span> <span class="kw">this</span>.think(text);
+  }
+}</code></pre>
+
+  <div class="code-title"><b>2 · Brain</b> — new IPC handler in main, cloned from the existing vision handler</div>
+  <pre><code><span class="cm">// electron/main.cjs — sits beside the gpt-4o vision handler (821-876).</span>
+<span class="cm">// Key stays in main; renderer never sees it. Same loop shape the Realtime</span>
+<span class="cm">// session ran internally: model → tool_calls → execute → re-call, ≤ N rounds.</span>
+ipcMain.handle(<span class="st">"llm:chat"</span>, <span class="kw">async</span> (_e, { messages }) =&gt; {
+  <span class="kw">for</span> (<span class="kw">let</span> round = 0; round &lt; 4; round++) {
+    <span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="st">"https://api.openai.com/v1/chat/completions"</span>, {
+      method: <span class="st">"POST"</span>,
+      headers: { Authorization: <span class="st">`Bearer ${process.env.OPENAI_API_KEY}`</span>, <span class="st">"Content-Type"</span>: <span class="st">"application/json"</span> },
+      body: <span class="fn">JSON</span>.stringify({
+        model: <span class="st">"gpt-4o"</span>,
+        messages: [{ role: <span class="st">"system"</span>, content: RICKY_INSTRUCTIONS }, ...messages],  <span class="cm">// same instructions, main.cjs:19-47</span>
+        tools: toolSpecs,                                            <span class="cm">// same 30 specs, main.cjs:49-435</span>
+      }),
+    }).then(r =&gt; r.json());
+    <span class="kw">const</span> msg = res.choices[0].message;
+    <span class="kw">if</span> (!msg.tool_calls?.length) <span class="kw">return</span> msg.content;
+    messages.push(msg);
+    <span class="kw">for</span> (<span class="kw">const</span> call <span class="kw">of</span> msg.tool_calls) {
+      <span class="kw">const</span> out = <span class="kw">await</span> <span class="fn">runTool</span>(call);             <span class="cm">// the dispatcher behind tools:execute</span>
+      messages.push({ role: <span class="st">"tool"</span>, tool_call_id: call.id, content: <span class="fn">JSON</span>.stringify(out) });
+    }
+  }
+});
+<span class="cm">// Phase 4: swap the URL for http://localhost:11434/v1/chat/completions (Ollama) — nothing else changes.</span></code></pre>
+
+  <div class="code-title"><b>3 · Kokoro → speakers → mouth</b> — the viseme meter survives untouched</div>
+  <pre><code><span class="kw">import</span> { KokoroTTS } <span class="kw">from</span> <span class="st">"kokoro-js"</span>;
+
+<span class="kw">this</span>.tts = <span class="kw">await</span> KokoroTTS.from_pretrained(<span class="st">"onnx-community/Kokoro-82M-v1.0-ONNX"</span>,
+  { dtype: <span class="st">"q8"</span>, device: <span class="st">"webgpu"</span> });        <span class="cm">// fp32 if quality &gt; speed; wasm works too</span>
+
+<span class="kw">async</span> <span class="fn">think</span>(userText: string) {
+  <span class="kw">const</span> reply = <span class="kw">await</span> window.ricky.llmChat(<span class="kw">this</span>.history);   <span class="cm">// IPC from sketch 2</span>
+  <span class="kw">this</span>.callbacks.onTranscript?.({ role: <span class="st">"assistant"</span>, text: reply });
+  <span class="kw">const</span> speech = <span class="kw">await</span> <span class="kw">this</span>.tts.generate(reply, { voice: <span class="st">"af_heart"</span> });
+  <span class="kw">this</span>.speak(speech.audio, speech.sampling_rate);   <span class="cm">// Float32Array @ 24 kHz</span>
+}
+
+<span class="fn">speak</span>(float32: Float32Array, sampleRate: number) {
+  <span class="kw">this</span>.stopPlayback();
+  <span class="kw">const</span> buf = <span class="kw">this</span>.ctx.createBuffer(1, float32.length, sampleRate);
+  buf.copyToChannel(float32, 0);
+  <span class="kw">this</span>.source = <span class="kw">this</span>.ctx.createBufferSource();
+  <span class="kw">this</span>.source.buffer = buf;
+  <span class="kw">this</span>.analyser = <span class="kw">this</span>.ctx.createAnalyser();          <span class="cm">// fftSize 1024, smoothing 0.72 —</span>
+  <span class="kw">this</span>.source.connect(<span class="kw">this</span>.analyser).connect(<span class="kw">this</span>.ctx.destination);
+  <span class="kw">this</span>.source.onended = () =&gt; <span class="kw">this</span>.callbacks.onMood?.(<span class="st">"idle"</span>);
+  <span class="kw">this</span>.source.start();
+  <span class="kw">this</span>.callbacks.onMood?.(<span class="st">"speaking"</span>);
+  <span class="kw">this</span>.startVisemeLoop(<span class="kw">this</span>.analyser);               <span class="cm">// reuse the RMS/band math from realtime.ts:334-359 verbatim</span>
+}
+
+<span class="fn">bargeIn</span>() {                                          <span class="cm">// the local stand-in for interrupt_response</span>
+  <span class="kw">if</span> (<span class="kw">this</span>.mood === <span class="st">"speaking"</span>) { <span class="kw">this</span>.source?.stop(); <span class="kw">this</span>.llmAbort?.abort(); }
+  <span class="kw">this</span>.callbacks.onMood?.(<span class="st">"listening"</span>);
+}</code></pre>
+
+  <p style="margin-top:8px">Deps for the whole thing: <code>npm i kokoro-js @huggingface/transformers @ricky0123/vad-web</code>.
+  Note <code>speech.audio</code> gives raw samples, which is what we want — <code>toBlob()</code>/WAV encoding is only
+  needed if audio ever crosses IPC as a file (Option B).</p>
+</section>
+
+<!-- ══════════ 06 ══════════ -->
+<section id="voices">
+  <div class="sec-head"><span class="sec-no">06</span><h2>Picking a voice for Ricky</h2></div>
+  <p>
+    Realtime's <code>cedar</code> disappears with the migration. Kokoro ships ~20 English voices; the naming is
+    <code>&lt;lang&gt;&lt;gender&gt;_name</code> (<code>a</code>=US, <code>b</code>=UK; <code>f</code>/<code>m</code>).
+    A short tasting flight for an assistant persona:
+  </p>
+  <table>
+    <tr><th>Voice</th><th>Character</th><th>Try it as…</th></tr>
+    <tr><td><code>af_heart</code></td><td>warm, natural female — Kokoro's flagship</td><td>default recommendation</td></tr>
+    <tr><td><code>am_michael</code> / <code>am_adam</code></td><td>neutral-to-deep male</td><td>closest cousins of a “cedar”-style neutral male</td></tr>
+    <tr><td><code>am_puck</code></td><td>playful male</td><td>leans into Ricky's cheeky persona</td></tr>
+    <tr><td><code>af_sky</code> / <code>af_bella</code></td><td>bright / clear female</td><td>more energy, good over music/sfx</td></tr>
+    <tr><td><code>bf_emma</code> / <code>bm_george</code></td><td>British pair</td><td>if Ricky should sound like a butler</td></tr>
+  </table>
+  <p>Voice files are tiny per-voice downloads; swapping is a string constant. Blends are also possible in some
+  runtimes (<code>af_heart(2)+af_sky(1)</code> style), worth exploring once the basics work.</p>
+</section>
+
+<!-- ══════════ 07 ══════════ -->
+<section id="latency">
+  <div class="sec-head"><span class="sec-no amber">07</span><h2>Latency & resource budget (M3 Pro)</h2></div>
+  <p>Honest expectations — figures marked <span class="pill a">est.</span> are to be confirmed in Phase 0's benchmark, not promises:</p>
+  <table>
+    <tr><th>Stage</th><th>Expected</th><th>Notes</th></tr>
+    <tr><td>Silero VAD decision</td><td>~ms — negligible</td><td>runs per 30 ms frame</td></tr>
+    <tr><td>Whisper base, ~3 s utterance</td><td>~0.3–1 s native · ~1–3 s wasm <span class="pill a">est.</span></td><td>WebGPU lands between; mlx-whisper would be fastest of all</td></tr>
+    <tr><td>gpt-4o chat first token</td><td>~0.3–0.7 s</td><td>network — disappears in Phase 4 (Ollama)</td></tr>
+    <tr><td>Kokoro, one sentence</td><td>~0.5–2 s, faster than real time</td><td>Kokoro-FastAPI publishes &lt;1 s first-token on this exact chip</td></tr>
+    <tr><td><b>Total round trip</b></td><td><b>~1.5–3 s</b> vs ~1–1.5 s on Realtime</td><td>the real price of local: slightly slower, fully private, $0/min</td></tr>
+    <tr><td>Resident memory</td><td>~0.5–1 GB for all models <span class="pill a">est.</span></td><td>comfortable on an M3 Pro; models stay loaded between turns</td></tr>
+    <tr><td>Disk</td><td>~250–450 MB (q8 set)</td><td>first-run download with progress UI, then offline forever</td></tr>
+  </table>
+  <p>Latency levers if it feels sluggish: <code>.en</code> whisper models (English-only, sharper+smaller), whisper-tiny
+  for VAD-adjacent "quick" turns, Kokoro fp16/q8, sentence-splitting long replies and speaking the first sentence
+  while generating the rest (streaming-style pipelining).</p>
+</section>
+
+<!-- ══════════ 08 ══════════ -->
+<section id="plan">
+  <div class="sec-head"><span class="sec-no">08</span><h2>Phased migration plan</h2></div>
+
+  <div class="phase">
+    <div class="no">0</div>
+    <div>
+      <h4>Spike & benchmark — one scratch page, no app changes</h4>
+      <p>Open a throwaway HTML next to <code>preview-svg-robot.html</code>: load kokoro-js and a Whisper pipeline,
+      time TTS generation and STT of a recorded 3-second clip, WebGPU vs wasm. Confirms the Option A bet before
+      any real code moves. Also verify WebGPU is enabled in Electron 42 on this machine and check the app's CSP
+      allows <code>blob:</code>/<code>wasm-blob</code> URLs.</p>
+      <div class="accept"><b>Acceptance</b>Numbers in section 07 replaced by measured ones; go/no-go on Option A.</div>
+    </div>
+  </div>
+  <div class="phase">
+    <div class="no">1</div>
+    <div>
+      <h4>The seam</h4>
+      <p>Add <code>voice-provider.ts</code>, wrap <code>RickyRealtimeClient</code> behind it, select via
+      <code>RICKY_VOICE</code> env or a settings row in <code>data/ricky-db.json</code>. Zero behavior change —
+      Realtime remains the default.</p>
+      <div class="accept"><b>Acceptance</b>App behaves identically in both modes' realtime mode; local mode is a stub that connects/disconnects cleanly.</div>
+    </div>
+  </div>
+  <div class="phase">
+    <div class="no">2</div>
+    <div>
+      <h4>Local mouth — TTS via typed input</h4>
+      <p><code>LocalVoiceProvider.sendText()</code> → new <code>llm:chat</code> IPC → Kokoro → AudioContext with the
+      viseme meter re-pointed at the local analyser. This delivers a fully local <b>speaking</b> Ricky using the
+      existing text box, before any mic work.</p>
+      <div class="accept"><b>Acceptance</b>Typed message gets a spoken local reply with lip sync; no OpenAI audio endpoint touched.</div>
+    </div>
+  </div>
+  <div class="phase">
+    <div class="no">3</div>
+    <div>
+      <h4>Local ears — VAD + Whisper mic loop</h4>
+      <p>MicVAD wiring, per-utterance transcription, transcript callbacks in today's shape, mood machine,
+      barge-in interrupt. First-run model-download progress in the status line.</p>
+      <div class="accept"><b>Acceptance</b>Full spoken conversation with Wi-Fi off (only <code>llm:chat</code> still needs network). Barge-in stops speech within ~150 ms.</div>
+    </div>
+  </div>
+  <div class="phase">
+    <div class="no">4</div>
+    <div>
+      <h4>Optional: total offline</h4>
+      <p>Point <code>llm:chat</code> at Ollama (<code>localhost:11434/v1</code>, OpenAI-shaped) — instructions and tool
+      specs carry over as-is; smaller model may need the tool list trimmed. Pre-bundle models into the app
+      resources for a no-download installer.</p>
+      <div class="accept"><b>Acceptance</b>Network cable pulled; complete voice conversation including brain runs locally.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 09 ══════════ -->
+<section id="risks">
+  <div class="sec-head"><span class="sec-no amber">09</span><h2>Risks & gotchas</h2></div>
+  <table>
+    <tr><th>Risk</th><th>Mitigation</th></tr>
+    <tr><td><b>Whisper hallucinates on silence/music</b> — classic failure</td><td>only ever transcribe VAD-gated segments (never an open mic); drop empty/garbage text before <code>onTranscript</code></td></tr>
+    <tr><td><b>WebGPU unavailable/flaky in Electron</b></td><td>capability-check at load; fall back <code>device:"wasm", dtype:"q8"</code>; Phase 0 measures both</td></tr>
+    <tr><td><b>First-run model download UX</b> (~250–450 MB)</td><td>progress in the existing status line; cache lives in the renderer profile so it persists across restarts</td></tr>
+    <tr><td><b>CSP / blob / wasm loading</b> in the packaged app</td><td>verify <code>index.html</code>/headers allow <code>blob:</code> workers and wasm; set <code>env.allowLocalModels</code> if bundling models instead of downloading</td></tr>
+    <tr><td><b>Self-echo: Ricky hears itself</b> (false barge-in)</td><td>mic already uses <code>echoCancellation: true</code>; if speakers route around AEC, gate VAD while <code>mood === "speaking"</code></td></tr>
+    <tr><td><b>Turn boundaries dumber than semantic VAD</b></td><td>tune Silero threshold + min-silence; a 2-3 s end-of-speech pad feels natural for an assistant</td></tr>
+    <tr><td><b>Long replies block on full TTS</b></td><td>split at sentence boundaries, synthesize/speak pipelined; queue buffer sources back-to-back</td></tr>
+    <tr><td><b>Memory growth across long sessions</b></td><td>keep models loaded (that's the point), but release AudioBuffers and abort stale fetches on barge-in</td></tr>
+  </table>
+</section>
+
+<!-- ══════════ 10 ══════════ -->
+<section id="sources">
+  <div class="sec-head"><span class="sec-no">10</span><h2>Sources</h2></div>
+  <footer style="border-top:none;padding-top:4px">
+    <div class="src-list">
+      <a href="https://huggingface.co/posts/Xenova/503648859052804">Kokoro.js announcement — Xenova</a>
+      <a href="https://www.npmjs.com/package/kokoro-js">kokoro-js on npm</a>
+      <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro-82M model card</a>
+      <a href="https://github.com/hexgrad/kokoro">hexgrad/kokoro (pip)</a>
+      <a href="https://github.com/thewh1teagle/kokoro-onnx">kokoro-onnx</a>
+      <a href="https://github.com/remsky/Kokoro-FastAPI">Kokoro-FastAPI (OpenAI-compatible TTS)</a>
+      <a href="https://github.com/xenova/whisper-web">whisper-web — in-browser Whisper reference</a>
+      <a href="https://huggingface.co/docs/transformers.js">Transformers.js docs</a>
+      <a href="https://github.com/ricky0123/vad">@ricky0123/vad (Silero, browser)</a>
+      <a href="https://github.com/snakers4/silero-vad">Silero VAD</a>
+      <a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a>
+      <a href="https://github.com/ggml-org/whisper.cpp/tree/master/examples/server">whisper.cpp HTTP server</a>
+      <a href="https://github.com/JacobLinCool/smart-whisper">smart-whisper (Node addon)</a>
+      <a href="https://www.npmjs.com/package/nodejs-whisper">nodejs-whisper</a>
+      <a href="https://pypi.org/project/mlx-whisper/">mlx-whisper</a>
+      <a href="https://fedi.simonwillison.net/@simon/112955685097244255">mlx-whisper ≈3× faster than whisper.cpp</a>
+      <a href="https://github.com/fedirz/faster-whisper-server">Speaches (OpenAI-compatible STT/TTS)</a>
+      <a href="https://localai.io/docs/features/audio-to-text/">LocalAI audio→text</a>
+    </div>
+    <p style="margin-top:22px">Research document — no code was changed in the making of this plan. Generated 2026-08-20.</p>
+  </footer>
+</section>
+
+</div>
+</body>
+</html>

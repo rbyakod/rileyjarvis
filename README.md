@@ -2,11 +2,12 @@
 
 RileyJarvis is a local Electron desktop AI companion with realtime voice, a visual artifact panel, image generation, web search, notes, and opt-in macOS computer control.
 
-It is built with Electron, React, Vite, TypeScript, and the OpenAI Realtime API.
+It is built with Electron, React, Vite, TypeScript, and OpenAI APIs — with a fully local voice mode that keeps every audio byte on your machine.
 
 ## Features
 
-- Realtime speech-to-speech conversation with OpenAI Realtime.
+- **Local voice mode (default):** full-duplex conversation powered entirely on-device — Silero VAD for turn detection, Whisper (ONNX, WebGPU) for speech-to-text, and Kokoro-82M for text-to-speech. Works offline after the first model download, with barge-in interruption while Jarvis speaks. Toggle it in the control strip (CPU icon = local, cloud icon = OpenAI Realtime).
+- Realtime speech-to-speech conversation with OpenAI Realtime (fallback engine).
 - Animated companion face with listening, thinking, speaking, and working states.
 - Artifact panel for markdown, menus, notes, Mermaid diagrams, generated images, records, and progress.
 - YouTube thumbnail board with persistent numbered generations and image edits.
@@ -40,6 +41,22 @@ EXA_API_KEY=your_exa_api_key_here
 ```
 
 `OPENAI_API_KEY` is required. `EXA_API_KEY` is optional; web search will show a setup message when it is missing.
+
+Optional overrides for the local voice mode's brain (it calls a chat-completions endpoint through the main process):
+
+```bash
+RICKY_LLM_MODEL=gpt-4o-mini          # any chat model with tool calling
+RICKY_LLM_BASE_URL=http://localhost:11434/v1   # e.g. Ollama, for 100% offline
+```
+
+## Local Voice Mode
+
+Voice defaults to running on your machine: Silero VAD → Whisper → chat LLM → Kokoro, via `kokoro-js`, `@huggingface/transformers`, and `@ricky0123/vad-web` (all ONNX Runtime Web, WebGPU-accelerated on Apple Silicon with a WASM fallback). Details and the migration story live in `local-voice-plan.html`.
+
+- First connect downloads the models once (~250–450 MB, cached afterwards; runtime assets under `public/vendor/` are copied locally by `npm run voice:assets`, which also runs on install/dev/build).
+- Models stay loaded across sessions, so reconnecting is instant.
+- Only the LLM brain still needs the network — swap in any OpenAI-compatible local server with `RICKY_LLM_BASE_URL` to go fully offline.
+- Tuning knobs (voice, models, chunking, VAD thresholds) sit at the top of `src/lib/local-voice.ts`.
 
 ## macOS Permissions
 

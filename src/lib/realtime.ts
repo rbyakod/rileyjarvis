@@ -1,4 +1,8 @@
 import type { RickyArtifact, RickyToolCall, RickyToolResult, RickyToolSpec } from "../vite-env";
+import type { VoiceProvider } from "./voice-provider";
+import { silentMouthShape, startVisemeLoop, type MouthShape } from "./viseme";
+
+export type { MouthShape };
 
 export type RickyConnectionState = "idle" | "connecting" | "connected" | "error";
 export type RickyMood =
@@ -12,13 +16,6 @@ export type RickyMood =
   | "curious"
   | "confused"
   | "celebrating";
-
-export type MouthShape = {
-  open: number;
-  width: number;
-  round: number;
-  teeth: number;
-};
 
 export type TranscriptEntry = {
   id: string;
@@ -36,6 +33,8 @@ export type RealtimeCallbacks = {
   onMode: (mode: "display" | "computer") => void;
   onStatus: (message: string) => void;
   onThumbnailReady: () => void;
+  /** The renderer owns the emotion tour; providers just report the request. */
+  onEmotionTour?: () => void;
 };
 
 type ServerEvent = {
@@ -65,7 +64,7 @@ type ResponseOutputItem = {
 
 const realtimeUrl = "https://api.openai.com/v1/realtime/calls";
 
-export class RickyRealtimeClient {
+export class RickyRealtimeClient implements VoiceProvider {
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
   private micStream: MediaStream | null = null;
@@ -74,9 +73,7 @@ export class RickyRealtimeClient {
   private toolSpecs: RickyToolSpec[] = [];
   private toolRunning = false;
   private audioContext: AudioContext | null = null;
-  private outputAnalyser: AnalyserNode | null = null;
-  private outputMeterFrame = 0;
-  private smoothedMouthShape: MouthShape = silentMouthShape();
+  private stopVisemes: (() => void) | null = null;
 
   constructor(callbacks: RealtimeCallbacks) {
     this.callbacks = callbacks;
@@ -113,7 +110,7 @@ export class RickyRealtimeClient {
       dc.addEventListener("open", () => {
         this.callbacks.onConnectionState("connected");
         this.callbacks.onMood("idle");
-        this.callbacks.onStatus("Ricky is live. Start talking naturally.");
+        this.callbacks.onStatus("Jarvis is live. Start talking naturally.");
       });
       dc.addEventListener("message", (event) => {
         void this.handleServerEvent(event.data);
@@ -166,7 +163,7 @@ export class RickyRealtimeClient {
 
   sendText(text: string): void {
     if (!this.dc || this.dc.readyState !== "open") {
-      this.callbacks.onStatus("Connect Ricky before sending a text prompt.");
+      this.callbacks.onStatus("Connect Jarvis before sending a text prompt.");
       return;
     }
     this.callbacks.onTranscript(newEntry("user", text));
@@ -267,7 +264,7 @@ export class RickyRealtimeClient {
         this.callbacks.onArtifact({
           title: "Generating Image",
           kind: "imageLoading",
-          content: typeof parsedArgs.prompt === "string" ? parsedArgs.prompt : "Ricky is generating an image.",
+          content: typeof parsedArgs.prompt === "string" ? parsedArgs.prompt : "Jarvis is generating an image.",
         });
       }
       if (name === "thumbnail_generate" || name === "thumbnail_edit") {
@@ -291,6 +288,7 @@ export class RickyRealtimeClient {
       }
       if (result.artifact) this.callbacks.onArtifact(result.artifact);
       if (result.thumbnailReady === true) this.callbacks.onThumbnailReady();
+      if (result.emotionTour === true) this.callbacks.onEmotionTour?.();
       if (result.silent !== true) shouldCreateResponse = true;
       await this.returnToolOutput(callId, result);
     }
@@ -322,91 +320,18 @@ export class RickyRealtimeClient {
     const audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.72;
     source.connect(analyser);
 
     this.audioContext = audioContext;
-    this.outputAnalyser = analyser;
-
-    const samples = new Uint8Array(analyser.fftSize);
-    const frequencies = new Uint8Array(analyser.frequencyBinCount);
-    const tick = () => {
-      analyser.getByteTimeDomainData(samples);
-      analyser.getByteFrequencyData(frequencies);
-      let total = 0;
-      for (const sample of samples) {
-        const centered = (sample - 128) / 128;
-        total += centered * centered;
-      }
-      const rms = Math.sqrt(total / samples.length);
-      const energy = clamp01(rms * 10.5);
-      const bands = getSpeechBands(frequencies);
-
-      // Simple realtime viseme approximation: low energy rounds the mouth,
-      // mid energy opens it, high energy stretches it for consonants/ee sounds.
-      const target: MouthShape = {
-        open: clamp01(energy * 0.75 + bands.mid * 0.45 - bands.high * 0.16),
-        width: clamp01(0.28 + bands.mid * 0.55 + bands.high * 0.74 - bands.low * 0.28),
-        round: clamp01(0.08 + bands.low * 0.95 + energy * 0.1 - bands.high * 0.42),
-        teeth: clamp01(bands.high * 1.4 + bands.mid * 0.25 - bands.low * 0.35),
-      };
-
-      this.smoothedMouthShape = smoothMouthShape(this.smoothedMouthShape, target, 0.36);
-      this.callbacks.onMouthShape(this.smoothedMouthShape);
-      this.outputMeterFrame = window.requestAnimationFrame(tick);
-    };
-    tick();
+    this.stopVisemes = startVisemeLoop(analyser, this.callbacks.onMouthShape);
   }
 
   private stopOutputMeter(): void {
-    if (this.outputMeterFrame) {
-      window.cancelAnimationFrame(this.outputMeterFrame);
-      this.outputMeterFrame = 0;
-    }
+    this.stopVisemes?.();
+    this.stopVisemes = null;
     void this.audioContext?.close();
     this.audioContext = null;
-    this.outputAnalyser = null;
-    this.smoothedMouthShape = silentMouthShape();
   }
-}
-
-function silentMouthShape(): MouthShape {
-  return { open: 0, width: 0.18, round: 0, teeth: 0 };
-}
-
-function smoothMouthShape(current: MouthShape, target: MouthShape, amount: number): MouthShape {
-  return {
-    open: lerp(current.open, target.open, amount),
-    width: lerp(current.width, target.width, amount),
-    round: lerp(current.round, target.round, amount),
-    teeth: lerp(current.teeth, target.teeth, amount),
-  };
-}
-
-function getSpeechBands(frequencies: Uint8Array): { low: number; mid: number; high: number } {
-  const low = averageRange(frequencies, 2, 14) / 255;
-  const mid = averageRange(frequencies, 14, 48) / 255;
-  const high = averageRange(frequencies, 48, 110) / 255;
-  return { low: clamp01(low * 2.2), mid: clamp01(mid * 2.1), high: clamp01(high * 2.8) };
-}
-
-function averageRange(values: Uint8Array, start: number, end: number): number {
-  const cappedEnd = Math.min(end, values.length);
-  if (start >= cappedEnd) return 0;
-  let total = 0;
-  for (let index = start; index < cappedEnd; index += 1) {
-    total += values[index];
-  }
-  return total / (cappedEnd - start);
-}
-
-function lerp(from: number, to: number, amount: number): number {
-  return from + (to - from) * amount;
-}
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
 }
 
 export function newEntry(role: TranscriptEntry["role"], text: string): TranscriptEntry {
@@ -426,7 +351,7 @@ function safeParseEvent(raw: string): ServerEvent {
   }
 }
 
-function parseToolArguments(raw: string): Record<string, unknown> {
+export function parseToolArguments(raw: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(raw) as unknown;
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
@@ -435,7 +360,7 @@ function parseToolArguments(raw: string): Record<string, unknown> {
   }
 }
 
-function sanitizeToolResult(result: RickyToolResult): RickyToolResult {
+export function sanitizeToolResult(result: RickyToolResult): RickyToolResult {
   if (!result.artifact) return result;
 
   const { artifact, ...rest } = result;
